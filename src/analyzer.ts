@@ -125,13 +125,13 @@ export function printPricingSummary(report: IntervalReport): void {
   for (const agg of report.pricing.aggregated) {
     if (agg.internal_price_usd == null) continue;
     const internal = `$${agg.internal_price_usd.toFixed(6)}`;
-    const external = agg.external_price_usd != null ? `$${agg.external_price_usd.toFixed(6)}` : "n/a";
+    const reference = agg.reference_price_usd != null ? `$${agg.reference_price_usd.toFixed(6)}` : "n/a";
     const divPct   = agg.divergence_pct != null
       ? `${agg.divergence_pct >= 0 ? "+" : ""}${agg.divergence_pct.toFixed(4)}%`
       : "n/a";
     const flag     = agg.is_divergent ? " ⚠ DIVERGENT" : "";
     console.log(
-      `  ${agg.symbol.padEnd(8)} internal=${internal.padEnd(14)} external=${external.padEnd(14)} divergence=${divPct.padStart(10)}${flag}`
+      `  ${agg.symbol.padEnd(8)} internal=${internal.padEnd(14)} reference=${reference.padEnd(14)} divergence=${divPct.padStart(10)}${flag}`
     );
   }
   console.log(`${divider}\n`);

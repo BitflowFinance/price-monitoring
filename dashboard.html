@@ -593,7 +593,7 @@
           </div>
         </div>
         <div class="section">
-          <h3>VWAP History (internal vs external reference)</h3>
+          <h3>VWAP History (internal vs reference)</h3>
           <div class="chart-wrap" style="height: 260px">
             <canvas id="token-vwap-chart"></canvas>
           </div>
@@ -669,7 +669,7 @@
       // Pricing data
       let latestAggregated = []; // AggregatedPrice[] from the most recent report
       let latestPoolPrices = {}; // pool_id → PoolPriceUSD (from latest report)
-      let tokenHistory = {}; // symbol → { timestamps[], internalPrices[], externalPrices[] }
+      let tokenHistory = {}; // symbol → { timestamps[], internalPrices[], referencePrices[] }
 
       let currentView = "grid";
       let selectedPool = null;
@@ -689,6 +689,7 @@
         "sbtc-token": "sBTC",
         "token-aeusdc": "aeUSDC",
         usdcx: "USDCx",
+        "usdh-token-v1": "USDh",
       };
 
       const STABLECOIN_CONTRACTS = new Set([
@@ -766,6 +767,36 @@
         const a = Math.abs(n);
         if (a >= 1) return n.toFixed(2);
         return n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+      }
+
+      function getReferencePrice(agg) {
+        return agg?.reference_price_usd ?? agg?.external_price_usd ?? null;
+      }
+
+      function getReferenceSource(agg) {
+        return agg?.reference_source ?? "coingecko";
+      }
+
+      function getReferenceBadge(agg) {
+        const refPrice = getReferencePrice(agg);
+        if (refPrice == null) return "no ref";
+        return getReferenceSource(agg) === "fixed-peg"
+          ? `peg $${fmtPrice(refPrice)}`
+          : `ref $${fmtPrice(refPrice)}`;
+      }
+
+      function getReferenceOnlyLabel(agg) {
+        const refPrice = getReferencePrice(agg);
+        if (refPrice == null) return "—";
+        return getReferenceSource(agg) === "fixed-peg"
+          ? `$${fmtPrice(refPrice)} (fixed peg only)`
+          : `$${fmtPrice(refPrice)} (ref only)`;
+      }
+
+      function getReferenceDescriptor(agg) {
+        return getReferenceSource(agg) === "fixed-peg"
+          ? "vs fixed $1.00 peg"
+          : "vs CoinGecko";
       }
 
       function fmtTime(iso) {
@@ -915,13 +946,13 @@
               tokenHistory[agg.symbol] = {
                 timestamps: [],
                 internalPrices: [],
-                externalPrices: [],
+                referencePrices: [],
               };
             }
             const th = tokenHistory[agg.symbol];
             th.timestamps.push(run_at);
             th.internalPrices.push(agg.internal_price_usd);
-            th.externalPrices.push(agg.external_price_usd);
+            th.referencePrices.push(getReferencePrice(agg));
           }
 
           if (!latestRunAt || run_at > latestRunAt) {
@@ -945,7 +976,7 @@
           const zipped = th.timestamps.map((t, i) => ({
             t,
             ip: th.internalPrices[i],
-            ep: th.externalPrices[i],
+            rp: th.referencePrices[i],
           }));
           zipped.sort((a, b) => a.t.localeCompare(b.t));
           // Deduplicate by timestamp (keep last for each)
@@ -954,7 +985,7 @@
           const deduped = Array.from(seen.values());
           th.timestamps = deduped.map((z) => z.t);
           th.internalPrices = deduped.map((z) => z.ip);
-          th.externalPrices = deduped.map((z) => z.ep);
+          th.referencePrices = deduped.map((z) => z.rp);
         }
 
         renderAggBar();
@@ -1046,10 +1077,7 @@
 
             let priceDisplay, extStr, cardClass;
             if (res === "unavailable") {
-              const extRef =
-                agg.external_price_usd != null
-                  ? `$${fmtPrice(agg.external_price_usd)} ext ref`
-                  : "no data";
+              const extRef = getReferencePrice(agg) != null ? getReferenceBadge(agg) : "no data";
               priceDisplay = `<div class="agg-card-price unavailable">${extRef}</div>`;
               extStr = `no DEX data · <span class="agg-card-badge unavailable">unavailable</span>`;
               cardClass = agg.is_divergent
@@ -1063,10 +1091,7 @@
               priceDisplay = `<div class="agg-card-price">$${fmtPrice(
                 agg.internal_price_usd
               )}${badge}</div>`;
-              const extLabel =
-                agg.external_price_usd != null
-                  ? `ext $${fmtPrice(agg.external_price_usd)}`
-                  : "no ext";
+              const extLabel = getReferenceBadge(agg);
               extStr = `${extLabel} · ${agg.pool_count} pool${
                 agg.pool_count !== 1 ? "s" : ""
               }`;
@@ -1117,14 +1142,16 @@
           document.getElementById("t-price").textContent =
             agg.internal_price_usd != null
               ? `$${fmtPrice(agg.internal_price_usd)}${resLabel}`
-              : agg.external_price_usd != null
-              ? `$${fmtPrice(agg.external_price_usd)} (ext ref only)`
+              : getReferencePrice(agg) != null
+              ? getReferenceOnlyLabel(agg)
               : "—";
           const divStr =
             agg.divergence_pct != null
               ? `divergence ${
                   agg.divergence_pct >= 0 ? "+" : ""
-                }${agg.divergence_pct.toFixed(4)}% (tol ±${agg.tolerance_pct}%)`
+                }${agg.divergence_pct.toFixed(4)}% ${getReferenceDescriptor(
+                  agg
+                )} (tol ±${agg.tolerance_pct}%)`
               : "no divergence data";
           const divEl = document.getElementById("t-divergence");
           divEl.textContent = divStr;
@@ -1175,7 +1202,7 @@
         });
 
         // Latest external price as flat reference line
-        const latestExt = th.externalPrices[th.externalPrices.length - 1];
+        const latestExt = th.referencePrices[th.referencePrices.length - 1];
 
         const datasets = [
           {
@@ -1192,7 +1219,7 @@
 
         if (latestExt != null) {
           datasets.push({
-            label: "External reference",
+            label: "Reference",
             data: th.timestamps.map(() => latestExt),
             borderColor: "rgba(166,227,161,0.6)",
             borderDash: [4, 4],
@@ -1467,12 +1494,15 @@
             });
           });
 
-          // External reference: use latest external price for this pool's base symbol
+          // Reference price: use latest token-level reference for this pool's base symbol
           const pp = latestPoolPrices[pid];
           const baseSymbol = pp?.base_symbol;
           const extPrice = baseSymbol
             ? latestAggregated.find((a) => a.symbol === baseSymbol)
-                ?.external_price_usd ?? null
+                ?.reference_price_usd ??
+              latestAggregated.find((a) => a.symbol === baseSymbol)
+                ?.external_price_usd ??
+              null
             : null;
 
           const usdDatasets = [
@@ -1489,7 +1519,7 @@
           ];
           if (extPrice != null) {
             usdDatasets.push({
-              label: "External ref",
+              label: "Reference",
               data: usdHistory.timestamps.map(() => extPrice),
               borderColor: "rgba(166,227,161,0.6)",
               borderDash: [4, 4],

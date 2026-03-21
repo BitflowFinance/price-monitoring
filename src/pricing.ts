@@ -1,5 +1,10 @@
 import { Ticker, PoolPriceUSD, AggregatedPrice, PricingResult } from "./types.js";
-import { isStablecoin, tokenSymbol, TOLERANCE_PCT } from "./tokens.js";
+import {
+  FIXED_REFERENCE_PRICE_USD,
+  isStablecoin,
+  tokenSymbol,
+  TOLERANCE_PCT,
+} from "./tokens.js";
 import { scaleBinPrice, getDecimalsForCurrency } from "./utils.js";
 
 // ─────────────────────────────────────────────────────────
@@ -41,8 +46,11 @@ export function computePricing(
     const decimalsY    = getDecimalsForCurrency(ticker.target_currency);
     const scaledPrice  = scaleBinPrice(parseFloat(ticker.last_price), decimalsX, decimalsY);
 
-    // Use external stablecoin price (not hardcoded $1) so stablecoin depegs propagate correctly
-    const targetUsd = externalPrices[targetSymbol] ?? null;
+    // Stablecoin-quoted pools are interpreted against the tracked peg so stable
+    // assets are benchmarked directly to $1. Non-tracked quotes can still fall
+    // back to external market references.
+    const targetUsd =
+      FIXED_REFERENCE_PRICE_USD[targetSymbol] ?? externalPrices[targetSymbol] ?? null;
     const basePriceUsd = targetUsd != null ? scaledPrice * targetUsd : null;
 
     poolPrices.push({
@@ -138,13 +146,17 @@ export function computePricing(
   for (const symbol of allSymbols) {
     const entries  = vwapEntries[symbol] ?? [];
     const internal = vwap(entries);
-    const external = externalPrices[symbol] ?? null;
+    const fixedReference = FIXED_REFERENCE_PRICE_USD[symbol];
+    const marketReference = externalPrices[symbol] ?? null;
+    const reference = fixedReference ?? marketReference;
+    const referenceSource: AggregatedPrice['reference_source'] =
+      fixedReference != null ? 'fixed-peg' : 'coingecko';
 
     // ── Phase 4: Divergence calculation ──────────────────────────────────────
     let divergencePct: number | null = null;
     let isDivergent = false;
-    if (internal != null && external != null && external !== 0) {
-      divergencePct = ((internal - external) / external) * 100;
+    if (internal != null && reference != null && reference !== 0) {
+      divergencePct = ((internal - reference) / reference) * 100;
       const tolerance = TOLERANCE_PCT[symbol] ?? 2;
       isDivergent = Math.abs(divergencePct) > tolerance;
     }
@@ -170,8 +182,8 @@ export function computePricing(
     if (resolution === 'unavailable') {
       warnings.push('No DEX trading data — needs active trading volume on pairs involving this token');
     }
-    if (external == null) {
-      warnings.push('No external reference price (CoinGecko unavailable)');
+    if (reference == null) {
+      warnings.push('No reference price (CoinGecko unavailable)');
     }
     if (totalVolumeUsd === 0 && entries.length > 0) {
       warnings.push('No recent trading volume');
@@ -181,13 +193,19 @@ export function computePricing(
     }
     if (isDivergent && divergencePct != null) {
       const tolerance = TOLERANCE_PCT[symbol] ?? 2;
-      warnings.push(`Price diverges ${divergencePct >= 0 ? '+' : ''}${divergencePct.toFixed(4)}% from external (tolerance ±${tolerance}%)`);
+      const referenceLabel =
+        referenceSource === 'fixed-peg'
+          ? 'fixed $1.00 peg'
+          : 'CoinGecko reference';
+      warnings.push(`Price diverges ${divergencePct >= 0 ? '+' : ''}${divergencePct.toFixed(4)}% from ${referenceLabel} (tolerance ±${tolerance}%)`);
     }
 
     aggregated.push({
       symbol,
       internal_price_usd: internal,
-      external_price_usd: external,
+      reference_price_usd: reference,
+      reference_source: referenceSource,
+      external_price_usd: marketReference,
       divergence_pct:     divergencePct,
       tolerance_pct:      TOLERANCE_PCT[symbol] ?? 2,
       is_divergent:       isDivergent,

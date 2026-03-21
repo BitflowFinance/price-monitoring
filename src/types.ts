@@ -59,7 +59,9 @@ export interface PoolPriceUSD {
 export interface AggregatedPrice {
   symbol: string;
   internal_price_usd: number | null;
-  external_price_usd: number | null;
+  reference_price_usd: number | null;
+  reference_source: 'coingecko' | 'fixed-peg';
+  external_price_usd?: number | null; // legacy field for older saved reports
   divergence_pct: number | null;
   tolerance_pct: number;
   is_divergent: boolean;

@@ -1,6 +1,6 @@
 # ticker-analytics
 
-A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes, persists it as a rolling time-series, reports price and volume variance across multiple lookback windows, and monitors for depeg events by comparing on-chain VWAP prices against CoinGecko external reference prices.
+A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes, persists it as a rolling time-series, reports price and volume variance across multiple lookback windows, and monitors for depeg events by comparing on-chain VWAP prices against reference benchmarks.
 
 ---
 
@@ -53,11 +53,11 @@ A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes,
 
 ## Depeg monitoring
 
-The primary purpose of the pricing engine is to detect when any token's on-chain price diverges from the broader market — signaling a potential depeg. Each job run:
+The primary purpose of the pricing engine is to detect when any token's on-chain price diverges from its chosen reference benchmark. Each job run:
 
 1. Computes a **VWAP USD price** for every token from Bitflow pool data (following CoinGecko's methodology: convert each pool's price to USD via the target currency, then weight by volume)
-2. Fetches **external reference prices** from CoinGecko Pro API
-3. Computes **divergence %** between internal and external prices
+2. Fetches **market reference prices** from CoinGecko Pro API
+3. Computes **divergence %** between internal and reference prices
 4. Flags tokens that exceed their **tolerance threshold**
 
 ### Tolerance thresholds
@@ -83,7 +83,7 @@ stx_price_usd = scaleBinPrice(last_price, decimalsX, decimalsY) × sbtc_vwap_usd
 ```
 sBTC's VWAP is established first from direct-resolution pools, then used as a bridge.
 
-> Stablecoin prices are always fetched from CoinGecko rather than hardcoded to $1.00. This ensures that a stablecoin depeg is reflected in all token prices derived from it, not masked.
+> Tracked stablecoins (`aeUSDC`, `USDCx`, `USDh`) are benchmarked against a fixed `$1.00` peg. Direct pool USD conversion through those quote assets also assumes the peg, which avoids circularly reusing CoinGecko prices that may themselves come from Bitflow.
 
 ---
 
@@ -292,8 +292,9 @@ AggregatedPrice                        ← new
 ┌─────────────────────────────────────────────────────────┐
 │ symbol             string                               │
 │ internal_price_usd number | null   VWAP from pools      │
-│ external_price_usd number | null   from CoinGecko       │
-│ divergence_pct     number | null   ((int-ext)/ext)×100  │
+│ reference_price_usd number | null  benchmark price      │
+│ reference_source    string         coingecko/fixed-peg  │
+│ divergence_pct     number | null   ((int-ref)/ref)×100  │
 │ tolerance_pct      number                               │
 │ is_divergent       boolean                              │
 │ pool_count         number                               │
@@ -348,7 +349,7 @@ src/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `COINGECKO_API_KEY` | No | CoinGecko Pro API key. If unset, external prices are skipped and divergence will not be computed. |
+| `COINGECKO_API_KEY` | No | CoinGecko Pro API key. If unset, stablecoin peg checks still work, but CoinGecko-backed references for tokens like `STX` and `sBTC` will not be computed. |
 
 ---
 
@@ -364,10 +365,10 @@ src/
 ────────────────────────────────────────────────────────────────────────────────
   Aggregated USD Prices
 ────────────────────────────────────────────────────────────────────────────────
-  STX      internal=$0.261432     external=$0.262100     divergence=   -0.2550%
-  sBTC     internal=$95123.420000 external=$95000.000000 divergence=   +0.1299%
-  aeUSDC   internal=$1.000120     external=$1.000100     divergence=   +0.0020%
-  USDCx    internal=$0.999980     external=$1.000100     divergence=   -0.0120%
+  STX      internal=$0.261432     reference=$0.262100    divergence=   -0.2550%
+  sBTC     internal=$95123.420000 reference=$95000.000000 divergence=   +0.1299%
+  aeUSDC   internal=$1.000120     reference=$1.000000    divergence=   +0.0120%
+  USDCx    internal=$0.999980     reference=$1.000000    divergence=   -0.0020%
 ────────────────────────────────────────────────────────────────────────────────
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -421,17 +422,17 @@ npm run dashboard
 
 ### Token Price Bar (always visible)
 
-A row of cards at the top of every view, one per token (STX, sBTC, aeUSDC, USDCx), showing:
+A row of cards at the top of every view, one per token (STX, sBTC, aeUSDC, USDCx, USDh), showing:
 
 - VWAP internal USD price
-- External reference price from CoinGecko
+- Reference price
 - Divergence % — green (within tolerance), orange (>50% of tolerance), red (divergent, ⚠)
 
 Cards with active divergence get a red border. Click any card to open the **Token VWAP History** view.
 
 ### Pool Grid (home view)
 
-Seven pool cards in a responsive grid, each showing:
+Pool cards in a responsive grid, each showing:
 
 - Pool ID and token pair (e.g. STX/USDCx)
 - Current price, liquidity in USD, and base token USD price
@@ -447,7 +448,7 @@ Click any card to drill into the detail view.
 | Header | Pool ID, pair name, current price, last updated |
 | Variance table | Rows for each interval (30min / 2h / 6h / 12h / 24h), columns for price Δ%, **USD price Δ%**, base volume Δ%, target volume Δ% — colored by magnitude |
 | Price history | Line chart across all stored snapshots |
-| USD Price history | Line chart of base token USD price over time, with external reference as a dashed line |
+| USD Price history | Line chart of base token USD price over time, with the token reference as a dashed line |
 | Volume history | Line chart with base volume and target volume as separate datasets |
 | Activity log | All report entries for the pool, newest first, formatted like the console output |
 
@@ -456,7 +457,7 @@ Click any card to drill into the detail view.
 Opened by clicking a token card in the price bar. Shows:
 
 - VWAP internal price over time (line chart)
-- Latest external reference price as a flat dashed line
+- Latest reference price as a flat dashed line
 - Current divergence % and tolerance in the header
 
 The back button returns to the grid. All views auto-refresh every 60 seconds (countdown shown in the header).

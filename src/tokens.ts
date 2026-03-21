@@ -38,6 +38,14 @@ export const TOLERANCE_PCT: Record<string, number> = {
   USDh: 0.1,
 };
 
+// Tokens whose divergence should be measured against a fixed peg instead of
+// an external market feed.
+export const FIXED_REFERENCE_PRICE_USD: Record<string, number> = {
+  aeUSDC: 1,
+  USDCx: 1,
+  USDh: 1,
+};
+
 // CoinGecko API IDs for external price lookup
 export const COINGECKO_IDS: Record<string, string> = {
   STX: "blockstack",
