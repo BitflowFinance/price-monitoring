@@ -80,23 +80,335 @@
         text-align: center;
       }
 
-      /* ── Pool Grid ── */
-      .grid-wrap {
-        padding: 20px 24px;
+      /* ── Home Dashboard ── */
+      .dashboard-wrap {
+        padding: 20px 24px 28px;
         max-width: 1400px;
         margin: 0 auto;
       }
-      .grid-label {
-        font-size: 11px;
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .summary-card,
+      .home-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .summary-card {
+        padding: 14px 16px;
+      }
+      .summary-card.wide {
+        grid-column: span 2;
+      }
+      .summary-label,
+      .section-kicker {
+        font-size: 10px;
         color: var(--text-dim);
         text-transform: uppercase;
         letter-spacing: 0.1em;
+      }
+      .summary-value {
+        margin-top: 8px;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .summary-value.alert {
+        color: var(--red);
+      }
+      .summary-sub {
+        margin-top: 6px;
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .summary-note {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border-dim);
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+      .home-section {
+        padding: 16px 18px 18px;
         margin-bottom: 14px;
       }
-      #pool-grid {
+      .home-section.compact {
+        height: 100%;
+      }
+      .home-section-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .home-section-head h2 {
+        font-size: 22px;
+        line-height: 1.1;
+        color: var(--text);
+        margin-top: 6px;
+      }
+      .home-section-head p {
+        margin-top: 6px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      .monitor-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 12px;
+      }
+      .monitor-grid.stable {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .monitor-grid.market {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .monitor-card {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s, transform 0.12s;
+      }
+      .monitor-card:hover {
+        background: var(--bg-card-hov);
+        border-color: var(--cyan);
+        transform: translateY(-1px);
+      }
+      .monitor-card.alert {
+        border-color: rgba(243, 139, 168, 0.55);
+        box-shadow: 0 0 0 1px rgba(243, 139, 168, 0.08);
+      }
+      .monitor-card.implied {
+        border-color: rgba(250, 179, 135, 0.45);
+      }
+      .monitor-card.unavailable {
+        opacity: 0.72;
+      }
+      .monitor-card-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .monitor-symbol {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .monitor-badge-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .status-chip,
+      .monitor-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border: 1px solid var(--border);
+      }
+      .status-chip.ok {
+        color: var(--green);
+        background: rgba(166, 227, 161, 0.08);
+        border-color: rgba(166, 227, 161, 0.2);
+      }
+      .status-chip.warn,
+      .monitor-chip.warn {
+        color: var(--orange);
+        background: rgba(250, 179, 135, 0.08);
+        border-color: rgba(250, 179, 135, 0.2);
+      }
+      .status-chip.alert,
+      .monitor-chip.alert {
+        color: var(--red);
+        background: rgba(243, 139, 168, 0.08);
+        border-color: rgba(243, 139, 168, 0.2);
+      }
+      .status-chip.neutral,
+      .monitor-chip.neutral {
+        color: var(--text-dim);
+        background: rgba(88, 91, 112, 0.18);
+      }
+      .monitor-deviation {
+        font-size: 24px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+      }
+      .monitor-deviation.alert {
+        color: var(--red);
+      }
+      .monitor-deviation.warn {
+        color: var(--orange);
+      }
+      .monitor-deviation.ok {
+        color: var(--green);
+      }
+      .monitor-caption {
+        margin-top: 8px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .monitor-metrics,
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 10px;
+      }
+      .monitor-metrics {
+        margin-top: 14px;
+      }
+      .metric-strip {
+        margin-bottom: 14px;
+      }
+      .metric-tile {
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 11px 12px;
+      }
+      .metric-tile-label {
+        font-size: 10px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .metric-tile-value {
+        margin-top: 6px;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-tile-value.dim {
+        color: var(--text-dim);
+      }
+      .metric-tile-sub {
+        margin-top: 5px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .insight-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .insight-list {
+        display: grid;
+        gap: 10px;
+      }
+      .insight-item {
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+      }
+      .insight-item.alert {
+        border-color: rgba(243, 139, 168, 0.3);
+      }
+      .insight-item.note {
+        border-color: rgba(137, 220, 235, 0.25);
+      }
+      .insight-item.mover {
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s;
+      }
+      .insight-item.mover:hover {
+        background: var(--bg-card-hov);
+        border-color: var(--cyan);
+      }
+      .insight-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: baseline;
+      }
+      .insight-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .insight-body {
+        margin-top: 6px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+      .pool-table-wrap {
+        overflow-x: auto;
+      }
+      .pool-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .pool-table th {
+        text-align: left;
+        padding: 8px 10px;
+        color: var(--text-dim);
+        font-weight: 500;
+        border-bottom: 1px solid var(--border);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+      }
+      .pool-table td {
+        padding: 10px;
+        border-bottom: 1px solid var(--border-dim);
+        vertical-align: top;
+      }
+      .pool-table tr:last-child td {
+        border-bottom: none;
+      }
+      .pool-table tr.clickable {
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+      .pool-table tr.clickable:hover {
+        background: rgba(255,255,255,0.02);
+      }
+      .pool-table .pair-main {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .pool-table .pair-sub,
+      .pool-table .cell-sub {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .pool-table .cell-main {
+        color: var(--text);
+      }
+      .pool-table .cell-main.emphasis {
+        color: var(--cyan);
+        font-weight: 700;
+      }
+      .pool-table .cell-main.alert {
+        color: var(--red);
+        font-weight: 700;
       }
 
       /* ── Pool Card ── */
@@ -539,6 +851,50 @@
         color: var(--text-dim);
       }
 
+      @media (max-width: 1080px) {
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .summary-card.wide {
+          grid-column: span 2;
+        }
+        .monitor-grid.stable,
+        .monitor-grid.market,
+        .insight-columns {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .app-header,
+        .header-right,
+        .home-section-head,
+        .monitor-card-top,
+        .insight-top {
+          align-items: flex-start;
+        }
+        .app-header,
+        .header-right,
+        .home-section-head {
+          flex-direction: column;
+        }
+        .dashboard-wrap,
+        .detail-wrap,
+        .token-detail-wrap {
+          padding: 16px;
+        }
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
+        .summary-card.wide {
+          grid-column: span 1;
+        }
+        .metric-strip,
+        .monitor-metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+
       ::-webkit-scrollbar {
         width: 5px;
         height: 5px;
@@ -565,17 +921,84 @@
       </div>
     </header>
 
-    <!-- ─── Aggregated Price Bar (always visible) ─── -->
-    <div id="agg-bar-wrap" class="agg-bar">
-      <div class="agg-bar-label">Token USD Prices</div>
-      <div class="agg-cards" id="agg-cards"></div>
-    </div>
-
-    <!-- ─── View 1: Pool Grid ─── -->
+    <!-- ─── View 1: Dashboard Home ─── -->
     <div id="view-grid">
-      <div class="grid-wrap">
-        <div class="grid-label" id="grid-label">Live Pool Overview</div>
-        <div id="pool-grid"><div class="loading">Loading data…</div></div>
+      <div class="dashboard-wrap">
+        <div class="summary-grid" id="summary-grid">
+          <div class="loading">Loading data…</div>
+        </div>
+
+        <section class="home-section">
+          <div class="home-section-head">
+            <div>
+              <div class="section-kicker">Primary</div>
+              <h2>Peg Monitor</h2>
+              <p>Bitflow-estimated USD versus the fixed $1.00 benchmark.</p>
+            </div>
+          </div>
+          <div class="monitor-grid stable" id="stable-grid"></div>
+        </section>
+
+        <section class="home-section">
+          <div class="home-section-head">
+            <div>
+              <div class="section-kicker">Secondary</div>
+              <h2>Market Tokens</h2>
+              <p>Bitflow-estimated USD versus CoinGecko benchmark prices.</p>
+            </div>
+          </div>
+          <div class="monitor-grid market" id="market-grid"></div>
+        </section>
+
+        <div class="insight-columns">
+          <section class="home-section compact">
+            <div class="home-section-head">
+              <div>
+                <div class="section-kicker">Watch</div>
+                <h2>Alerts & Notes</h2>
+                <p>What needs attention and what this dashboard currently covers.</p>
+              </div>
+            </div>
+            <div class="insight-list" id="alerts-list"></div>
+          </section>
+
+          <section class="home-section compact">
+            <div class="home-section-head">
+              <div>
+                <div class="section-kicker">Movement</div>
+                <h2>Top Pool Movers</h2>
+                <p>Largest 30-minute changes across tracked pools.</p>
+              </div>
+            </div>
+            <div class="insight-list" id="movers-list"></div>
+          </section>
+        </div>
+
+        <section class="home-section">
+          <div class="home-section-head">
+            <div>
+              <div class="section-kicker">Explorer</div>
+              <h2>Pool Explorer</h2>
+              <p>AMM pair quote, Bitflow-estimated USD, and benchmark side by side.</p>
+            </div>
+          </div>
+          <div class="pool-table-wrap">
+            <table class="pool-table">
+              <thead>
+                <tr>
+                  <th>Pool</th>
+                  <th>AMM Price</th>
+                  <th>Bitflow Est. USD</th>
+                  <th>Benchmark</th>
+                  <th>Liquidity</th>
+                  <th>30m Price Δ</th>
+                  <th>30m Vol Δ</th>
+                </tr>
+              </thead>
+              <tbody id="pool-table-body"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -592,6 +1015,7 @@
             </div>
           </div>
         </div>
+        <div class="metric-strip" id="t-summary-strip"></div>
         <div class="section">
           <h3>VWAP History (internal vs reference)</h3>
           <div class="chart-wrap" style="height: 260px">
@@ -615,6 +1039,7 @@
             </div>
           </div>
         </div>
+        <div class="metric-strip" id="d-summary-strip"></div>
 
         <div class="section">
           <h3>Variance by Interval</h3>
@@ -634,12 +1059,12 @@
         </div>
 
         <div class="section">
-          <h3>Price History</h3>
+          <h3>AMM Pair Price History</h3>
           <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
         </div>
 
         <div class="section">
-          <h3>USD Price History</h3>
+          <h3>Bitflow-estimated USD History</h3>
           <div class="chart-wrap"><canvas id="usd-price-chart"></canvas></div>
         </div>
 
@@ -692,11 +1117,6 @@
         "usdh-token-v1": "USDh",
       };
 
-      const STABLECOIN_CONTRACTS = new Set([
-        "usdcx",
-        "token-aeusdc",
-        "usdh-token-v1",
-      ]);
       const TOLERANCE_PCT = {
         STX: 2,
         sBTC: 2,
@@ -704,11 +1124,7 @@
         USDCx: 0.1,
         USDh: 0.1,
       };
-
-      function isStablecoin(contractId) {
-        const suffix = contractId.split(".").pop();
-        return STABLECOIN_CONTRACTS.has(suffix);
-      }
+      const STABLE_SYMBOLS = ["aeUSDC", "USDCx", "USDh"];
 
       const TOKEN_DECIMALS = {
         "token-stx-v-1-2": 6,
@@ -777,14 +1193,6 @@
         return agg?.reference_source ?? "coingecko";
       }
 
-      function getReferenceBadge(agg) {
-        const refPrice = getReferencePrice(agg);
-        if (refPrice == null) return "no ref";
-        return getReferenceSource(agg) === "fixed-peg"
-          ? `peg $${fmtPrice(refPrice)}`
-          : `ref $${fmtPrice(refPrice)}`;
-      }
-
       function getReferenceOnlyLabel(agg) {
         const refPrice = getReferencePrice(agg);
         if (refPrice == null) return "—";
@@ -797,6 +1205,116 @@
         return getReferenceSource(agg) === "fixed-peg"
           ? "vs fixed $1.00 peg"
           : "vs CoinGecko";
+      }
+
+      function isTrackedStable(symbol) {
+        return STABLE_SYMBOLS.includes(symbol);
+      }
+
+      function pairTokens(ticker_id) {
+        const idx = ticker_id.indexOf("_");
+        if (idx < 0) return { base: ticker_id, target: "—" };
+        return {
+          base: tokenName(ticker_id.slice(0, idx)),
+          target: tokenName(ticker_id.slice(idx + 1)),
+        };
+      }
+
+      function getAgg(symbol) {
+        return latestAggregated.find((a) => a.symbol === symbol) ?? null;
+      }
+
+      function formatBenchmarkLabel(agg, short = false) {
+        const refPrice = getReferencePrice(agg);
+        if (refPrice == null) return short ? "No benchmark" : "No benchmark available";
+        return getReferenceSource(agg) === "fixed-peg"
+          ? short
+            ? `$${fmtPrice(refPrice)} peg`
+            : `Fixed peg · $${fmtPrice(refPrice)}`
+          : short
+          ? `$${fmtPrice(refPrice)} CG`
+          : `CoinGecko · $${fmtPrice(refPrice)}`;
+      }
+
+      function formatDivergence(agg, includeStatus = false) {
+        if (!agg || agg.divergence_pct == null || isNaN(agg.divergence_pct)) {
+          return "—";
+        }
+        const sign = agg.divergence_pct >= 0 ? "+" : "";
+        const value = isTrackedStable(agg.symbol)
+          ? `${sign}${(agg.divergence_pct * 100).toFixed(1)} bps`
+          : `${sign}${agg.divergence_pct.toFixed(2)}%`;
+        if (!includeStatus) return value;
+        return `${value} ${agg.is_divergent ? "⚠" : "✓"}`;
+      }
+
+      function getDivergenceClass(agg) {
+        if (!agg || agg.divergence_pct == null || isNaN(agg.divergence_pct)) {
+          return "neutral";
+        }
+        const tol = agg.tolerance_pct ?? TOLERANCE_PCT[agg.symbol] ?? 2;
+        if (agg.is_divergent) return "alert";
+        return Math.abs(agg.divergence_pct) > tol * 0.5 ? "warn" : "ok";
+      }
+
+      function getMonitorStatus(agg) {
+        if (!agg || agg.internal_price_usd == null) return { label: "No data", tone: "neutral" };
+        if (agg.is_divergent) return { label: "Alert", tone: "alert" };
+        if (agg.resolution === "implied") return { label: "Implied", tone: "warn" };
+        if (isTrackedStable(agg.symbol)) return { label: "On peg", tone: "ok" };
+        return { label: "In range", tone: "ok" };
+      }
+
+      function getCoverageSummary() {
+        const families = Array.from(
+          new Set(allPools.map((pid) => pid.split("_")[0].toUpperCase()))
+        );
+        const familyLabel = families.length ? families.join(" / ") : "none";
+        const note =
+          families.length === 1 && families[0] === "DLMM"
+            ? "Current dashboard coverage is limited to the upstream /tickers feed, which is currently exposing only DLMM pools."
+            : "Dashboard coverage matches whatever the upstream /tickers feed currently returns.";
+        return {
+          label: familyLabel,
+          note,
+        };
+      }
+
+      function getLatestDataTimestamp() {
+        const latestSnapshot = snapshots[snapshots.length - 1]?.timestamp ?? null;
+        const latestReportRun = reports[reports.length - 1]?.run_at ?? null;
+        if (!latestSnapshot) return latestReportRun;
+        if (!latestReportRun) return latestSnapshot;
+        return latestSnapshot > latestReportRun ? latestSnapshot : latestReportRun;
+      }
+
+      function getPoolOverview(pid) {
+        const s = poolTS[pid];
+        if (!s) return null;
+        const tokens = pairTokens(s.ticker_id);
+        const ammPrice = s.prices[s.prices.length - 1] ?? null;
+        const liquidity = s.liquidity[s.liquidity.length - 1] ?? null;
+        const pp = latestPoolPrices[pid];
+        const baseSymbol = pp?.base_symbol ?? tokens.base;
+        const agg = getAgg(baseSymbol);
+        const r30 = latestBI[pid]?.["30min"];
+        return {
+          pid,
+          tokens,
+          ammPrice,
+          ammLabel:
+            ammPrice != null
+              ? `1 ${tokens.base} = ${fmtPrice(ammPrice)} ${tokens.target}`
+              : "—",
+          estimatedUsd: pp?.base_price_usd ?? null,
+          benchmark: getReferencePrice(agg),
+          benchmarkSource: getReferenceSource(agg),
+          benchmarkLabel: formatBenchmarkLabel(agg),
+          priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
+          volumeChangePct: r30?.base_volume?.percent ?? null,
+          liquidity,
+          agg,
+        };
       }
 
       function fmtTime(iso) {
@@ -923,10 +1441,6 @@
           );
         });
 
-        document.getElementById(
-          "grid-label"
-        ).textContent = `Live Pool Overview · ${allPools.length} pools`;
-
         // ── pricing: aggregated prices + token history ────────
         latestAggregated = [];
         latestPoolPrices = {};
@@ -987,8 +1501,6 @@
           th.internalPrices = deduped.map((z) => z.ip);
           th.referencePrices = deduped.map((z) => z.rp);
         }
-
-        renderAggBar();
       }
 
       // ══════════════════════════════════════════════════════
@@ -1044,93 +1556,306 @@
       }
 
       // ══════════════════════════════════════════════════════
-      // Aggregated Price Bar
+      // Home Dashboard
       // ══════════════════════════════════════════════════════
-      function renderAggBar() {
-        const container = document.getElementById("agg-cards");
+      function formatPct(pct, dp = 2) {
+        if (pct == null || isNaN(pct)) return "—";
+        const sign = pct >= 0 ? "+" : "";
+        return `${sign}${pct.toFixed(dp)}%`;
+      }
+
+      function makeMetricTile(label, value, sub = "", valueClass = "") {
+        return `<div class="metric-tile">
+  <div class="metric-tile-label">${label}</div>
+  <div class="metric-tile-value ${valueClass}">${value}</div>
+  ${sub ? `<div class="metric-tile-sub">${sub}</div>` : ""}
+</div>`;
+      }
+
+      function renderSummaryCards() {
+        const container = document.getElementById("summary-grid");
         if (!latestAggregated.length) {
-          container.innerHTML =
-            '<span style="color:var(--text-dim);font-size:11px">No pricing data yet</span>';
+          container.innerHTML = '<div class="loading">No pricing data yet</div>';
           return;
         }
 
-        container.innerHTML = latestAggregated
+        const latestTs = getLatestDataTimestamp();
+        const alertCount = latestAggregated.filter((a) => a.is_divergent).length;
+        const stableAlerts = latestAggregated.filter(
+          (a) => isTrackedStable(a.symbol) && a.is_divergent
+        ).length;
+        const marketCount = latestAggregated.filter(
+          (a) => !isTrackedStable(a.symbol)
+        ).length;
+        const pegBenchmarks = latestAggregated.filter(
+          (a) => getReferenceSource(a) === "fixed-peg"
+        ).length;
+        const coverage = getCoverageSummary();
+
+        container.innerHTML = `
+<div class="summary-card wide">
+  <div class="summary-label">Health Snapshot</div>
+  <div class="summary-value ${alertCount ? "alert" : ""}">${alertCount} active alert${
+          alertCount === 1 ? "" : "s"
+        }</div>
+  <div class="summary-sub">
+    ${stableAlerts} peg alert${stableAlerts === 1 ? "" : "s"} · ${marketCount} market token${
+          marketCount === 1 ? "" : "s"
+        } tracked · ${pegBenchmarks} fixed-peg benchmark${pegBenchmarks === 1 ? "" : "s"}
+  </div>
+  <div class="summary-note">${coverage.note}</div>
+</div>
+<div class="summary-card">
+  <div class="summary-label">Last Update</div>
+  <div class="summary-value">${latestTs ? fmtTime(latestTs) : "—"}</div>
+  <div class="summary-sub">Auto-refreshes every 60s while the dashboard is open.</div>
+</div>
+<div class="summary-card">
+  <div class="summary-label">Tracked Pools</div>
+  <div class="summary-value">${allPools.length}</div>
+  <div class="summary-sub">${coverage.label} feed · click any row below for pool detail.</div>
+</div>`;
+      }
+
+      function renderMonitorCards(containerId, symbols) {
+        const container = document.getElementById(containerId);
+        const cards = symbols.map((symbol) => getAgg(symbol)).filter(Boolean);
+        if (!cards.length) {
+          container.innerHTML =
+            '<div class="metric-tile"><div class="metric-tile-label">No data</div><div class="metric-tile-value dim">Waiting for reports</div></div>';
+          return;
+        }
+
+        container.innerHTML = cards
           .map((agg) => {
-            const res = agg.resolution ?? "vwap";
-            const warnings = agg.warnings ?? [];
-            const divPct = agg.divergence_pct;
-            const tol = agg.tolerance_pct ?? TOLERANCE_PCT[agg.symbol] ?? 2;
-            const divClass =
-              divPct == null
-                ? ""
-                : agg.is_divergent
-                ? "danger"
-                : Math.abs(divPct) > tol * 0.5
-                ? "warn"
-                : "ok";
-            const divStr =
-              divPct == null
-                ? "—"
-                : `${divPct >= 0 ? "+" : ""}${divPct.toFixed(4)}% ${
-                    agg.is_divergent ? "⚠" : "✓"
-                  }`;
+            const status = getMonitorStatus(agg);
+            const divergenceClass = getDivergenceClass(agg);
+            const referenceChip =
+              getReferenceSource(agg) === "fixed-peg"
+                ? `<span class="monitor-chip neutral">peg benchmark</span>`
+                : `<span class="monitor-chip neutral">market benchmark</span>`;
+            const impliedChip =
+              agg.resolution === "implied"
+                ? `<span class="monitor-chip warn">implied</span>`
+                : "";
+            const warningLine =
+              agg.warnings?.length && !agg.is_divergent
+                ? `<div class="monitor-caption">${agg.warnings[0]}</div>`
+                : "";
 
-            let priceDisplay, extStr, cardClass;
-            if (res === "unavailable") {
-              const extRef = getReferencePrice(agg) != null ? getReferenceBadge(agg) : "no data";
-              priceDisplay = `<div class="agg-card-price unavailable">${extRef}</div>`;
-              extStr = `no DEX data · <span class="agg-card-badge unavailable">unavailable</span>`;
-              cardClass = agg.is_divergent
-                ? "agg-card unavailable divergent"
-                : "agg-card unavailable";
-            } else {
-              const badge =
-                res === "implied"
-                  ? `<span class="agg-card-badge implied">implied</span>`
-                  : "";
-              priceDisplay = `<div class="agg-card-price">$${fmtPrice(
-                agg.internal_price_usd
-              )}${badge}</div>`;
-              const extLabel = getReferenceBadge(agg);
-              extStr = `${extLabel} · ${agg.pool_count} pool${
-                agg.pool_count !== 1 ? "s" : ""
-              }`;
-              cardClass = agg.is_divergent
-                ? "agg-card divergent"
-                : res === "implied"
-                ? "agg-card implied"
-                : "agg-card";
-            }
-
-            const warnIcon = warnings.length
-              ? `<span class="agg-card-warn-icon">⚠<span class="warn-tooltip">${warnings
-                  .map((w) => `• ${w}`)
-                  .join("<br>")}</span></span>`
-              : "";
-
-            return `<div class="${cardClass}" onclick="showTokenDetail('${agg.symbol}')">
-  <div class="agg-card-symbol">${agg.symbol}${warnIcon}</div>
-  ${priceDisplay}
-  <div class="agg-card-ext">${extStr}</div>
-  <div class="agg-card-div ${divClass}">${divStr}</div>
+            return `<div class="monitor-card ${status.tone} ${agg.resolution}" onclick="showTokenDetail('${agg.symbol}')">
+  <div class="monitor-card-top">
+    <div>
+      <div class="monitor-symbol">${agg.symbol}</div>
+      <div class="monitor-badge-row">
+        <span class="status-chip ${status.tone}">${status.label}</span>
+        ${referenceChip}
+        ${impliedChip}
+      </div>
+    </div>
+    <div class="monitor-deviation ${divergenceClass}">${formatDivergence(agg)}</div>
+  </div>
+  <div class="monitor-caption">${getReferenceDescriptor(agg)} · ${agg.pool_count} contributing pool${
+              agg.pool_count === 1 ? "" : "s"
+            } · est. volume $${fmtNum(agg.total_volume_usd || 0)}</div>
+  <div class="monitor-metrics">
+    ${makeMetricTile(
+      "Bitflow Est. USD",
+      agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—",
+      agg.internal_price_usd != null
+        ? "Translated from tracked Bitflow pools"
+        : "No on-feed trading data"
+    )}
+    ${makeMetricTile(
+      "Benchmark",
+      getReferencePrice(agg) != null ? `$${fmtPrice(getReferencePrice(agg))}` : "—",
+      formatBenchmarkLabel(agg)
+    )}
+    ${makeMetricTile(
+      "Tolerance",
+      `±${agg.tolerance_pct}%`,
+      isTrackedStable(agg.symbol)
+        ? "Displayed in bps because peg moves are small"
+        : "Displayed in percent versus market reference"
+    )}
+  </div>
+  ${warningLine}
 </div>`;
           })
           .join("");
       }
 
-      // Returns an extra line for pool cards showing USD price
-      function poolUsdLine(pid) {
-        const pp = latestPoolPrices[pid];
-        if (!pp || pp.base_price_usd == null) return "";
-        return ` · $${fmtPrice(pp.base_price_usd)} USD`;
+      function renderAlertsList() {
+        const container = document.getElementById("alerts-list");
+        const items = [];
+        const coverage = getCoverageSummary();
+        items.push({
+          type: "note",
+          title: `Coverage · ${coverage.label}`,
+          body: coverage.note,
+        });
+
+        latestAggregated
+          .filter((agg) => agg.is_divergent)
+          .sort((a, b) => {
+            const aStable = isTrackedStable(a.symbol) ? 0 : 1;
+            const bStable = isTrackedStable(b.symbol) ? 0 : 1;
+            return aStable - bStable || a.symbol.localeCompare(b.symbol);
+          })
+          .forEach((agg) => {
+            items.push({
+              type: "alert",
+              title: `${agg.symbol} ${formatDivergence(agg)} vs ${formatBenchmarkLabel(
+                agg,
+                true
+              )}`,
+              body: `Bitflow est. USD ${
+                agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—"
+              } · ${agg.pool_count} pool${agg.pool_count === 1 ? "" : "s"} · ${
+                agg.warnings?.[0] ?? "Outside configured tolerance."
+              }`,
+            });
+          });
+
+        if (items.length === 1) {
+          items.push({
+            type: "note",
+            title: "No active token alerts",
+            body: "All tracked assets are currently within their configured tolerance bands.",
+          });
+        }
+
+        container.innerHTML = items
+          .map(
+            (item) => `<div class="insight-item ${item.type}">
+  <div class="insight-top">
+    <div class="insight-title">${item.title}</div>
+  </div>
+  <div class="insight-body">${item.body}</div>
+</div>`
+          )
+          .join("");
+      }
+
+      function renderMoversList() {
+        const container = document.getElementById("movers-list");
+        const movers = allPools
+          .map((pid) => getPoolOverview(pid))
+          .filter((pool) => pool)
+          .sort(
+            (a, b) =>
+              Math.abs(b.priceChangePct ?? 0) - Math.abs(a.priceChangePct ?? 0) ||
+              (b.liquidity ?? 0) - (a.liquidity ?? 0)
+          )
+          .slice(0, 4);
+
+        if (!movers.length) {
+          container.innerHTML =
+            '<div class="insight-item note"><div class="insight-title">No mover data yet</div><div class="insight-body">30-minute comparison data appears after enough snapshots exist.</div></div>';
+          return;
+        }
+
+        container.innerHTML = movers
+          .map(
+            (pool) => `<div class="insight-item mover" onclick="showDetail('${pool.pid}')">
+  <div class="insight-top">
+    <div class="insight-title">${pool.tokens.base}/${pool.tokens.target}</div>
+    <div class="${vcClass(pool.priceChangePct)}">${formatPct(pool.priceChangePct)}</div>
+  </div>
+  <div class="insight-body">
+    ${pool.ammLabel}<br>
+    Bitflow est. USD ${
+      pool.estimatedUsd != null ? `$${fmtPrice(pool.estimatedUsd)}` : "—"
+    } · Liquidity $${fmtNum(pool.liquidity ?? 0)}
+  </div>
+</div>`
+          )
+          .join("");
+      }
+
+      function renderPoolTable() {
+        const body = document.getElementById("pool-table-body");
+        const rows = allPools
+          .map((pid) => getPoolOverview(pid))
+          .filter((pool) => pool)
+          .sort((a, b) => {
+            const aAlert = a.agg?.is_divergent ? 1 : 0;
+            const bAlert = b.agg?.is_divergent ? 1 : 0;
+            return (
+              bAlert - aAlert ||
+              Math.abs(b.priceChangePct ?? 0) - Math.abs(a.priceChangePct ?? 0) ||
+              (b.liquidity ?? 0) - (a.liquidity ?? 0)
+            );
+          });
+
+        if (!rows.length) {
+          body.innerHTML =
+            '<tr><td colspan="7" style="color:var(--text-dim)">No pool data available.</td></tr>';
+          return;
+        }
+
+        body.innerHTML = rows
+          .map((pool) => {
+            const benchmarkText =
+              pool.benchmark != null ? formatBenchmarkLabel(pool.agg) : "—";
+            const usdClass = pool.agg?.is_divergent ? "alert" : "emphasis";
+            return `<tr class="clickable" onclick="showDetail('${pool.pid}')">
+  <td>
+    <div class="pair-main">${pool.tokens.base}/${pool.tokens.target}</div>
+    <div class="pair-sub">${pool.pid}</div>
+  </td>
+  <td>
+    <div class="cell-main">${pool.ammLabel}</div>
+    <div class="cell-sub">Raw Bitflow AMM quote</div>
+  </td>
+  <td>
+    <div class="cell-main ${usdClass}">${
+              pool.estimatedUsd != null ? `$${fmtPrice(pool.estimatedUsd)}` : "—"
+            }</div>
+    <div class="cell-sub">Bitflow-estimated USD for ${pool.tokens.base}</div>
+  </td>
+  <td>
+    <div class="cell-main">${benchmarkText}</div>
+    <div class="cell-sub">${
+              pool.agg ? getReferenceDescriptor(pool.agg).replace("vs ", "") : "No benchmark"
+            }</div>
+  </td>
+  <td>
+    <div class="cell-main">$${fmtNum(pool.liquidity ?? 0)}</div>
+    <div class="cell-sub">Latest reported liquidity</div>
+  </td>
+  <td><span class="${vcClass(pool.priceChangePct)}">${formatPct(
+              pool.priceChangePct
+            )}</span></td>
+  <td><span class="${vcClass(pool.volumeChangePct)}">${formatPct(
+              pool.volumeChangePct
+            )}</span></td>
+</tr>`;
+          })
+          .join("");
+      }
+
+      function renderGrid() {
+        renderSummaryCards();
+        renderMonitorCards("stable-grid", STABLE_SYMBOLS);
+        renderMonitorCards(
+          "market-grid",
+          latestAggregated
+            .filter((agg) => !isTrackedStable(agg.symbol))
+            .map((agg) => agg.symbol)
+        );
+        renderAlertsList();
+        renderMoversList();
+        renderPoolTable();
       }
 
       // ══════════════════════════════════════════════════════
       // Token Detail View
       // ══════════════════════════════════════════════════════
       function renderTokenDetail(symbol) {
-        const agg = latestAggregated.find((a) => a.symbol === symbol);
+        const agg = getAgg(symbol);
         document.getElementById("t-symbol").textContent = symbol;
+        document.getElementById("t-summary-strip").innerHTML = "";
         if (agg) {
           const res = agg.resolution ?? "vwap";
           const resLabel =
@@ -1158,6 +1883,24 @@
           divEl.style.color = agg.is_divergent
             ? "var(--red)"
             : "var(--text-dim)";
+          document.getElementById("t-summary-strip").innerHTML = `
+${makeMetricTile(
+  "Bitflow Est. USD",
+  agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—",
+  agg.internal_price_usd != null
+    ? `${agg.pool_count} contributing pool${agg.pool_count === 1 ? "" : "s"}`
+    : "No on-feed trading data"
+)}
+${makeMetricTile(
+  "Benchmark",
+  getReferencePrice(agg) != null ? `$${fmtPrice(getReferencePrice(agg))}` : "—",
+  formatBenchmarkLabel(agg)
+)}
+${makeMetricTile(
+  "Deviation",
+  formatDivergence(agg),
+  `Tolerance ±${agg.tolerance_pct}%`
+)}`;
 
           // Warnings list
           const warnings = agg.warnings ?? [];
@@ -1175,7 +1918,7 @@
                 const isError =
                   w.startsWith("No DEX") ||
                   w.startsWith("Price resolution failed") ||
-                  w.startsWith("No external");
+                  w.startsWith("No reference");
                 const color = isError ? "var(--red)" : "var(--orange)";
                 return `<div style="color:${color}">⚠ ${w}</div>`;
               })
@@ -1186,10 +1929,15 @@
         }
 
         const th = tokenHistory[symbol];
+        const tokenChartWrap = document.querySelector(
+          "#view-token .section .chart-wrap"
+        );
         if (!th || !th.timestamps.length) {
-          document.querySelector("#view-token .section .chart-wrap").innerHTML =
-            '<div class="loading">No history yet</div>';
+          tokenChartWrap.innerHTML = '<div class="loading">No history yet</div>';
           return;
+        }
+        if (!document.getElementById("token-vwap-chart")) {
+          tokenChartWrap.innerHTML = '<canvas id="token-vwap-chart"></canvas>';
         }
 
         const labels = th.timestamps.map((t) => {
@@ -1201,7 +1949,7 @@
           });
         });
 
-        // Latest external price as flat reference line
+        // Latest reference price as flat benchmark line
         const latestExt = th.referencePrices[th.referencePrices.length - 1];
 
         const datasets = [
@@ -1245,113 +1993,14 @@
       }
 
       // ══════════════════════════════════════════════════════
-      // Grid View
-      // ══════════════════════════════════════════════════════
-      function renderGrid() {
-        const grid = document.getElementById("pool-grid");
-        if (!allPools.length) {
-          grid.innerHTML = '<div class="loading">No data available</div>';
-          return;
-        }
-
-        grid.innerHTML = allPools
-          .map((pid) => {
-            const s = poolTS[pid];
-            if (!s) return "";
-            const price = s.prices[s.prices.length - 1];
-            const liq = s.liquidity[s.liquidity.length - 1];
-            const pair = pairName(s.ticker_id);
-            const r30 = latestBI[pid]?.["30min"];
-            return `
-<div class="pool-card" onclick="showDetail('${pid}')">
-  <div class="card-top">
-    <div>
-      <div class="card-pool-id">${pid}</div>
-      <div class="card-pair">${pair}</div>
-    </div>
-  </div>
-  <div class="card-price">${fmtPrice(price)}</div>
-  <div class="card-liquidity">Liquidity · $${fmtNum(liq)}${poolUsdLine(
-              pid
-            )}</div>
-  <div class="badge-row">
-    ${makeBadge("Price 30m", r30?.last_price?.percent)}
-    ${makeBadge("Vol 30m", r30?.base_volume?.percent)}
-  </div>
-  <div class="sparkline-wrap"><canvas id="spark-${pid}" height="36"></canvas></div>
-</div>`;
-          })
-          .join("");
-
-        // Draw sparklines once layout is committed
-        requestAnimationFrame(() => allPools.forEach(drawSparkline));
-      }
-
-      function makeBadge(label, pct) {
-        if (pct == null || isNaN(pct)) {
-          return `<span class="badge badge-neu"><span class="badge-lbl">${label}</span> —</span>`;
-        }
-        const cls = pct > 0 ? "badge-pos" : pct < 0 ? "badge-neg" : "badge-neu";
-        const sign = pct > 0 ? "+" : "";
-        return `<span class="badge ${cls}"><span class="badge-lbl">${label}</span> ${sign}${pct.toFixed(
-          2
-        )}%</span>`;
-      }
-
-      function drawSparkline(pid) {
-        const canvas = document.getElementById("spark-" + pid);
-        if (!canvas) return;
-        const s = poolTS[pid];
-        if (!s || s.prices.length < 2) return;
-
-        const prices = s.prices; // use all 14 points
-        const w = canvas.parentElement.offsetWidth || 260;
-        const h = 36;
-        canvas.width = w;
-        canvas.height = h;
-
-        const ctx = canvas.getContext("2d");
-        const min = Math.min(...prices),
-          max = Math.max(...prices);
-        const range = max - min || 1;
-        const px = 3,
-          py = 3;
-
-        const toX = (i) => px + (i / (prices.length - 1)) * (w - px * 2);
-        const toY = (v) => py + (1 - (v - min) / range) * (h - py * 2);
-
-        const rising = prices[prices.length - 1] >= prices[0];
-        const lc = rising ? "#a6e3a1" : "#f38ba8";
-        const fc = rising ? "rgba(166,227,161,0.09)" : "rgba(243,139,168,0.09)";
-
-        // gradient fill
-        ctx.beginPath();
-        ctx.moveTo(toX(0), toY(prices[0]));
-        prices.forEach((p, i) => ctx.lineTo(toX(i), toY(p)));
-        ctx.lineTo(toX(prices.length - 1), h);
-        ctx.lineTo(toX(0), h);
-        ctx.closePath();
-        ctx.fillStyle = fc;
-        ctx.fill();
-
-        // line
-        ctx.beginPath();
-        ctx.moveTo(toX(0), toY(prices[0]));
-        prices.forEach((p, i) => ctx.lineTo(toX(i), toY(p)));
-        ctx.strokeStyle = lc;
-        ctx.lineWidth = 1.5;
-        ctx.lineJoin = "round";
-        ctx.stroke();
-      }
-
-      // ══════════════════════════════════════════════════════
       // Detail View
       // ══════════════════════════════════════════════════════
       const INTERVALS = ["30min", "2h", "6h", "12h", "24h"];
 
       function renderDetail(pid) {
+        const overview = getPoolOverview(pid);
         const s = poolTS[pid];
-        if (!s) return;
+        if (!s || !overview) return;
         document.getElementById("d-pair").textContent = pairName(s.ticker_id);
         document.getElementById("d-pool-id").textContent = pid;
         document.getElementById("d-price").textContent = fmtPrice(
@@ -1359,6 +2008,27 @@
         );
         document.getElementById("d-ts").textContent =
           "Last: " + fmtTime(s.timestamps[s.timestamps.length - 1]);
+        document.getElementById("d-summary-strip").innerHTML = `
+${makeMetricTile(
+  "AMM Pair Price",
+  overview.ammLabel,
+  "Raw quote from the selected Bitflow pool"
+)}
+${makeMetricTile(
+  "Bitflow Est. USD",
+  overview.estimatedUsd != null ? `$${fmtPrice(overview.estimatedUsd)}` : "—",
+  `Estimated USD for ${overview.tokens.base}`
+)}
+${makeMetricTile(
+  "Benchmark",
+  overview.benchmark != null ? `$${fmtPrice(overview.benchmark)}` : "—",
+  overview.agg ? formatBenchmarkLabel(overview.agg) : "No benchmark available"
+)}
+${makeMetricTile(
+  "Liquidity",
+  `$${fmtNum(overview.liquidity ?? 0)}`,
+  `30m price move ${formatPct(overview.priceChangePct)}`
+)}`;
 
         renderVarTable(pid);
         renderCharts(pid, s);
@@ -1388,7 +2058,7 @@
             return `
 <tr>
   <td class="iv-cell">${iv}</td>
-  <td colspan="4" style="color:var(--text-dim);font-size:11px;">No data yet</td>
+  <td colspan="5" style="color:var(--text-dim);font-size:11px;">No data yet</td>
 </tr>`;
           return `
 <tr>
@@ -1711,8 +2381,8 @@
           renderGrid();
         } catch (e) {
           document.getElementById(
-            "pool-grid"
-          ).innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message} — serve with: npx serve . -l 5000</div>`;
+            "view-grid"
+          ).innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message} — serve with: npm run dashboard</div>`;
           console.error(e);
         }
         startCountdown();
