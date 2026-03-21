@@ -1,0 +1,27 @@
+{
+  "name": "ticker-analytics",
+  "version": "1.0.0",
+  "description": "Bitflow ticker variance analytics cron job",
+  "main": "src/index.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start:compiled": "node dist/index.js",
+    "dashboard": "serve . -l 5000"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "serve": "^14.2.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
