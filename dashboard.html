@@ -188,9 +188,6 @@
         border-color: rgba(243, 139, 168, 0.55);
         box-shadow: 0 0 0 1px rgba(243, 139, 168, 0.08);
       }
-      .monitor-card.implied {
-        border-color: rgba(250, 179, 135, 0.45);
-      }
       .monitor-card.unavailable {
         opacity: 0.72;
       }
@@ -409,6 +406,37 @@
       .pool-table .cell-main.alert {
         color: var(--red);
         font-weight: 700;
+      }
+      .section-note {
+        margin: -4px 0 12px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+      .contrib-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border: 1px solid var(--border);
+      }
+      .contrib-chip.direct {
+        color: var(--green);
+        background: rgba(166, 227, 161, 0.08);
+        border-color: rgba(166, 227, 161, 0.2);
+      }
+      .contrib-chip.cross {
+        color: var(--cyan);
+        background: rgba(137, 220, 235, 0.08);
+        border-color: rgba(137, 220, 235, 0.2);
+      }
+      .contrib-chip.derived {
+        color: var(--orange);
+        background: rgba(250, 179, 135, 0.08);
+        border-color: rgba(250, 179, 135, 0.2);
       }
 
       /* ── Pool Card ── */
@@ -1017,9 +1045,39 @@
         </div>
         <div class="metric-strip" id="t-summary-strip"></div>
         <div class="section">
+          <h3>Contributing Pools</h3>
+          <div class="section-note" id="t-pools-note">
+            Each row shows the raw AMM quote and how this token's current USD estimate is derived from that pool.
+          </div>
+          <div class="pool-table-wrap">
+            <table class="pool-table">
+              <thead>
+                <tr>
+                  <th>Pool</th>
+                  <th>Contribution</th>
+                  <th>AMM Pair Price</th>
+                  <th>Token USD via Pool</th>
+                  <th>Benchmark</th>
+                  <th>Liquidity</th>
+                </tr>
+              </thead>
+              <tbody id="token-pool-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="section">
           <h3>VWAP History (internal vs reference)</h3>
-          <div class="chart-wrap" style="height: 260px">
+          <div class="chart-wrap" id="token-vwap-wrap" style="height: 260px">
             <canvas id="token-vwap-chart"></canvas>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Deviation vs Benchmark</h3>
+          <div class="section-note" id="t-divergence-note">
+            Shows how far the aggregated Bitflow estimate has been from the token benchmark over time.
+          </div>
+          <div class="chart-wrap" id="token-divergence-wrap" style="height: 220px">
+            <canvas id="token-divergence-chart"></canvas>
           </div>
         </div>
       </div>
@@ -1103,6 +1161,7 @@
       let volChart = null;
       let usdPriceChart = null;
       let tokenVwapChart = null;
+      let tokenDivergenceChart = null;
       let countdownVal = 60;
       let countdownTimer = null;
 
@@ -1125,6 +1184,20 @@
         USDh: 0.1,
       };
       const STABLE_SYMBOLS = ["aeUSDC", "USDCx", "USDh"];
+      const UTC_MONTHS = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
 
       const TOKEN_DECIMALS = {
         "token-stx-v-1-2": 6,
@@ -1183,6 +1256,20 @@
         const a = Math.abs(n);
         if (a >= 1) return n.toFixed(2);
         return n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+      }
+
+      function fmtStableUsd(n, minDp = 4, maxDp = 6) {
+        if (n == null || isNaN(n)) return "—";
+        const fixed = n.toFixed(maxDp);
+        const [whole, frac = ""] = fixed.split(".");
+        let trimmed = frac.replace(/0+$/, "");
+        if (trimmed.length < minDp) trimmed = frac.slice(0, minDp);
+        return `${whole}.${trimmed}`;
+      }
+
+      function fmtTokenUsd(symbol, n) {
+        if (n == null || isNaN(n)) return "—";
+        return isTrackedStable(symbol) ? fmtStableUsd(n) : fmtPrice(n);
       }
 
       function getReferencePrice(agg) {
@@ -1260,7 +1347,14 @@
       function getMonitorStatus(agg) {
         if (!agg || agg.internal_price_usd == null) return { label: "No data", tone: "neutral" };
         if (agg.is_divergent) return { label: "Alert", tone: "alert" };
-        if (agg.resolution === "implied") return { label: "Implied", tone: "warn" };
+        const tol = agg.tolerance_pct ?? TOLERANCE_PCT[agg.symbol] ?? 2;
+        if (
+          agg.divergence_pct != null &&
+          !isNaN(agg.divergence_pct) &&
+          Math.abs(agg.divergence_pct) > tol * 0.5
+        ) {
+          return { label: "Near limit", tone: "warn" };
+        }
         if (isTrackedStable(agg.symbol)) return { label: "On peg", tone: "ok" };
         return { label: "In range", tone: "ok" };
       }
@@ -1307,6 +1401,7 @@
               ? `1 ${tokens.base} = ${fmtPrice(ammPrice)} ${tokens.target}`
               : "—",
           estimatedUsd: pp?.base_price_usd ?? null,
+          baseSymbol,
           benchmark: getReferencePrice(agg),
           benchmarkSource: getReferenceSource(agg),
           benchmarkLabel: formatBenchmarkLabel(agg),
@@ -1317,17 +1412,102 @@
         };
       }
 
+      function getTokenContributingPools(symbol) {
+        const agg = getAgg(symbol);
+        if (!agg) return [];
+        const benchmark = getReferencePrice(agg);
+        const benchmarkLabel = formatBenchmarkLabel(agg);
+
+        return Object.values(latestPoolPrices)
+          .map((pp) => {
+            const s = poolTS[pp.pool_id];
+            const liquidity = s?.liquidity[s.liquidity.length - 1] ?? null;
+            const r30 = latestBI[pp.pool_id]?.["30min"];
+            const tokens = pairTokens(pp.ticker_id);
+            const ammLabel =
+              pp.scaled_price != null
+                ? `1 ${pp.base_symbol} = ${fmtPrice(pp.scaled_price)} ${pp.target_symbol}`
+                : "—";
+
+            if (pp.base_symbol === symbol && pp.base_price_usd != null) {
+              const contributionType =
+                pp.resolution === "cross-pair" ? "Cross-pair" : "Direct";
+              const contributionTone =
+                pp.resolution === "cross-pair" ? "cross" : "direct";
+              const note =
+                pp.resolution === "cross-pair"
+                  ? `${symbol} translated through ${pp.target_symbol}`
+                  : `${symbol} trades directly as the base token`;
+              return {
+                pool_id: pp.pool_id,
+                pair: `${tokens.base}/${tokens.target}`,
+                contributionType,
+                contributionTone,
+                note,
+                ammLabel,
+                tokenUsd: pp.base_price_usd,
+                benchmark,
+                benchmarkLabel,
+                liquidity,
+                priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
+              };
+            }
+
+            if (
+              pp.target_symbol === symbol &&
+              pp.scaled_price != null &&
+              pp.scaled_price !== 0
+            ) {
+              const baseAgg = getAgg(pp.base_symbol);
+              if (baseAgg?.internal_price_usd == null) return null;
+              return {
+                pool_id: pp.pool_id,
+                pair: `${tokens.base}/${tokens.target}`,
+                contributionType: "Derived",
+                contributionTone: "derived",
+                note: `${symbol} inferred from ${pp.base_symbol} est. USD ÷ AMM quote`,
+                ammLabel,
+                tokenUsd: baseAgg.internal_price_usd / pp.scaled_price,
+                benchmark,
+                benchmarkLabel,
+                liquidity,
+                priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
+              };
+            }
+
+            return null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => {
+            const rank = { Direct: 0, "Cross-pair": 1, Derived: 2 };
+            return (
+              (rank[a.contributionType] ?? 9) - (rank[b.contributionType] ?? 9) ||
+              (b.liquidity ?? 0) - (a.liquidity ?? 0)
+            );
+          });
+      }
+
       function fmtTime(iso) {
         if (!iso) return "—";
         const d = new Date(iso);
-        return (
-          d.toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-          }) +
-          " · " +
-          d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        return `${String(d.getUTCHours()).padStart(2, "0")}:${String(
+          d.getUTCMinutes()
+        ).padStart(2, "0")} UTC · ${UTC_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+      }
+
+      function fmtChartTime(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        return `${UTC_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} · ${String(
+          d.getUTCHours()
+        ).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}Z`;
+      }
+
+      function displayWarningText(text) {
+        if (!text) return "";
+        return text.replace(
+          "Price implied from DEX pairs, not direct trading",
+          "Price derived from DEX pairs, not direct trading"
         );
       }
 
@@ -1553,6 +1733,10 @@
           tokenVwapChart.destroy();
           tokenVwapChart = null;
         }
+        if (tokenDivergenceChart) {
+          tokenDivergenceChart.destroy();
+          tokenDivergenceChart = null;
+        }
       }
 
       // ══════════════════════════════════════════════════════
@@ -1608,7 +1792,7 @@
 <div class="summary-card">
   <div class="summary-label">Last Update</div>
   <div class="summary-value">${latestTs ? fmtTime(latestTs) : "—"}</div>
-  <div class="summary-sub">Auto-refreshes every 60s while the dashboard is open.</div>
+  <div class="summary-sub">All dashboard timestamps are shown in UTC. Auto-refreshes every 60s while open.</div>
 </div>
 <div class="summary-card">
   <div class="summary-label">Tracked Pools</div>
@@ -1636,11 +1820,13 @@
                 : `<span class="monitor-chip neutral">market benchmark</span>`;
             const impliedChip =
               agg.resolution === "implied"
-                ? `<span class="monitor-chip warn">implied</span>`
+                ? `<span class="monitor-chip warn">derived</span>`
                 : "";
             const warningLine =
               agg.warnings?.length && !agg.is_divergent
-                ? `<div class="monitor-caption">${agg.warnings[0]}</div>`
+                ? `<div class="monitor-caption">${displayWarningText(
+                    agg.warnings[0]
+                  )}</div>`
                 : "";
 
             return `<div class="monitor-card ${status.tone} ${agg.resolution}" onclick="showTokenDetail('${agg.symbol}')">
@@ -1661,9 +1847,11 @@
   <div class="monitor-metrics">
     ${makeMetricTile(
       "Bitflow Est. USD",
-      agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—",
+      agg.internal_price_usd != null ? `$${fmtTokenUsd(agg.symbol, agg.internal_price_usd)}` : "—",
       agg.internal_price_usd != null
-        ? "Translated from tracked Bitflow pools"
+        ? agg.resolution === "implied"
+          ? "Derived from tracked Bitflow pairs"
+          : "Translated from tracked Bitflow pools"
         : "No on-feed trading data"
     )}
     ${makeMetricTile(
@@ -1710,7 +1898,9 @@
                 true
               )}`,
               body: `Bitflow est. USD ${
-                agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—"
+                agg.internal_price_usd != null
+                  ? `$${fmtTokenUsd(agg.symbol, agg.internal_price_usd)}`
+                  : "—"
               } · ${agg.pool_count} pool${agg.pool_count === 1 ? "" : "s"} · ${
                 agg.warnings?.[0] ?? "Outside configured tolerance."
               }`,
@@ -1765,7 +1955,7 @@
   <div class="insight-body">
     ${pool.ammLabel}<br>
     Bitflow est. USD ${
-      pool.estimatedUsd != null ? `$${fmtPrice(pool.estimatedUsd)}` : "—"
+      pool.estimatedUsd != null ? `$${fmtTokenUsd(pool.baseSymbol, pool.estimatedUsd)}` : "—"
     } · Liquidity $${fmtNum(pool.liquidity ?? 0)}
   </div>
 </div>`
@@ -1810,7 +2000,9 @@
   </td>
   <td>
     <div class="cell-main ${usdClass}">${
-              pool.estimatedUsd != null ? `$${fmtPrice(pool.estimatedUsd)}` : "—"
+              pool.estimatedUsd != null
+                ? `$${fmtTokenUsd(pool.baseSymbol, pool.estimatedUsd)}`
+                : "—"
             }</div>
     <div class="cell-sub">Bitflow-estimated USD for ${pool.tokens.base}</div>
   </td>
@@ -1860,13 +2052,13 @@
           const res = agg.resolution ?? "vwap";
           const resLabel =
             res === "implied"
-              ? " (implied)"
+              ? " (derived)"
               : res === "unavailable"
               ? ""
               : " VWAP";
           document.getElementById("t-price").textContent =
             agg.internal_price_usd != null
-              ? `$${fmtPrice(agg.internal_price_usd)}${resLabel}`
+              ? `$${fmtTokenUsd(symbol, agg.internal_price_usd)}${resLabel}`
               : getReferencePrice(agg) != null
               ? getReferenceOnlyLabel(agg)
               : "—";
@@ -1886,9 +2078,11 @@
           document.getElementById("t-summary-strip").innerHTML = `
 ${makeMetricTile(
   "Bitflow Est. USD",
-  agg.internal_price_usd != null ? `$${fmtPrice(agg.internal_price_usd)}` : "—",
+  agg.internal_price_usd != null ? `$${fmtTokenUsd(symbol, agg.internal_price_usd)}` : "—",
   agg.internal_price_usd != null
-    ? `${agg.pool_count} contributing pool${agg.pool_count === 1 ? "" : "s"}`
+    ? agg.resolution === "implied"
+      ? `Derived from ${agg.pool_count} contributing pool${agg.pool_count === 1 ? "" : "s"}`
+      : `${agg.pool_count} contributing pool${agg.pool_count === 1 ? "" : "s"}`
     : "No on-feed trading data"
 )}
 ${makeMetricTile(
@@ -1920,7 +2114,7 @@ ${makeMetricTile(
                   w.startsWith("Price resolution failed") ||
                   w.startsWith("No reference");
                 const color = isError ? "var(--red)" : "var(--orange)";
-                return `<div style="color:${color}">⚠ ${w}</div>`;
+                return `<div style="color:${color}">⚠ ${displayWarningText(w)}</div>`;
               })
               .join("");
           } else {
@@ -1928,25 +2122,75 @@ ${makeMetricTile(
           }
         }
 
+        const contributorRows = getTokenContributingPools(symbol);
+        const poolNoteEl = document.getElementById("t-pools-note");
+        const poolBodyEl = document.getElementById("token-pool-body");
+        if (poolNoteEl) {
+          poolNoteEl.textContent = contributorRows.length
+            ? `${contributorRows.length} contributing pool${
+                contributorRows.length === 1 ? "" : "s"
+              } currently feed the ${symbol} estimate. Click any row for pool detail.`
+            : `No contributing pools are currently visible for ${symbol} in the tracked Bitflow feed.`;
+        }
+        if (poolBodyEl) {
+          poolBodyEl.innerHTML = contributorRows.length
+            ? contributorRows
+                .map(
+                  (row) => `<tr class="clickable" onclick="showDetail('${row.pool_id}')">
+  <td>
+    <div class="pair-main">${row.pair}</div>
+    <div class="pair-sub">${row.pool_id}</div>
+  </td>
+  <td>
+    <span class="contrib-chip ${row.contributionTone}">${row.contributionType}</span>
+    <div class="cell-sub">${row.note}</div>
+  </td>
+  <td>
+    <div class="cell-main">${row.ammLabel}</div>
+    <div class="cell-sub">Raw Bitflow AMM quote</div>
+  </td>
+  <td>
+    <div class="cell-main emphasis">$${fmtTokenUsd(symbol, row.tokenUsd)}</div>
+    <div class="cell-sub">${symbol} estimate from this pool</div>
+  </td>
+  <td>
+    <div class="cell-main">${
+      row.benchmark != null ? `$${fmtPrice(row.benchmark)}` : "—"
+    }</div>
+    <div class="cell-sub">${row.benchmarkLabel}</div>
+  </td>
+  <td>
+    <div class="cell-main">$${fmtNum(row.liquidity ?? 0)}</div>
+    <div class="cell-sub">${
+      row.priceChangePct != null
+        ? `30m price ${formatPct(row.priceChangePct)}`
+        : "Latest reported liquidity"
+    }</div>
+  </td>
+</tr>`
+                )
+                .join("")
+            : '<tr><td colspan="6" style="color:var(--text-dim)">No contributing pools available for this token.</td></tr>';
+        }
+
         const th = tokenHistory[symbol];
-        const tokenChartWrap = document.querySelector(
-          "#view-token .section .chart-wrap"
-        );
+        const tokenChartWrap = document.getElementById("token-vwap-wrap");
+        const tokenDivergenceWrap = document.getElementById("token-divergence-wrap");
+        const tokenDivergenceNote = document.getElementById("t-divergence-note");
         if (!th || !th.timestamps.length) {
           tokenChartWrap.innerHTML = '<div class="loading">No history yet</div>';
+          tokenDivergenceWrap.innerHTML = '<div class="loading">No divergence history yet</div>';
           return;
         }
         if (!document.getElementById("token-vwap-chart")) {
           tokenChartWrap.innerHTML = '<canvas id="token-vwap-chart"></canvas>';
         }
+        if (!document.getElementById("token-divergence-chart")) {
+          tokenDivergenceWrap.innerHTML = '<canvas id="token-divergence-chart"></canvas>';
+        }
 
         const labels = th.timestamps.map((t) => {
-          const d = new Date(t);
-          return d.toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          return fmtChartTime(t);
         });
 
         // Latest reference price as flat benchmark line
@@ -1960,7 +2204,10 @@ ${makeMetricTile(
             backgroundColor: "rgba(137,220,235,0.06)",
             fill: true,
             borderWidth: 1.5,
-            pointRadius: 0,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            pointBackgroundColor: "#89dceb",
+            pointBorderWidth: 0,
             tension: 0.2,
           },
         ];
@@ -1978,6 +2225,36 @@ ${makeMetricTile(
           });
         }
 
+        const divergenceSeries = th.timestamps.map((_, i) => {
+          const internal = th.internalPrices[i];
+          const reference = th.referencePrices[i];
+          if (
+            internal == null ||
+            reference == null ||
+            isNaN(internal) ||
+            isNaN(reference) ||
+            reference === 0
+          ) {
+            return null;
+          }
+          const divergencePct = ((internal - reference) / reference) * 100;
+          return isTrackedStable(symbol) ? divergencePct * 100 : divergencePct;
+        });
+        const divergenceHasData = divergenceSeries.some(
+          (value) => value != null && !isNaN(value)
+        );
+        const divergenceUnit = isTrackedStable(symbol) ? "bps" : "%";
+        const toleranceBand = isTrackedStable(symbol)
+          ? (agg?.tolerance_pct ?? TOLERANCE_PCT[symbol] ?? 2) * 100
+          : agg?.tolerance_pct ?? TOLERANCE_PCT[symbol] ?? 2;
+        if (tokenDivergenceNote) {
+          tokenDivergenceNote.textContent = divergenceHasData
+            ? `Positive values mean the Bitflow estimate was above the benchmark. Dashed rails show ±${toleranceBand.toFixed(
+                isTrackedStable(symbol) ? 1 : 2
+              )} ${divergenceUnit}.`
+            : "No benchmark history is available yet for this token.";
+        }
+
         if (tokenVwapChart) {
           tokenVwapChart.destroy();
           tokenVwapChart = null;
@@ -1987,7 +2264,81 @@ ${makeMetricTile(
           {
             type: "line",
             data: { labels, datasets },
-            options: chartOpts((v) => "$" + fmtPrice(v)),
+            options: chartOpts((v) => "$" + fmtTokenUsd(symbol, Number(v))),
+          }
+        );
+
+        if (tokenDivergenceChart) {
+          tokenDivergenceChart.destroy();
+          tokenDivergenceChart = null;
+        }
+        if (!divergenceHasData) {
+          tokenDivergenceWrap.innerHTML =
+            '<div class="loading">No divergence history yet</div>';
+          return;
+        }
+        if (!document.getElementById("token-divergence-chart")) {
+          tokenDivergenceWrap.innerHTML =
+            '<canvas id="token-divergence-chart"></canvas>';
+        }
+
+        tokenDivergenceChart = new Chart(
+          document.getElementById("token-divergence-chart").getContext("2d"),
+          {
+            type: "line",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: `Deviation (${divergenceUnit})`,
+                  data: divergenceSeries,
+                  borderColor: "#f9e2af",
+                  backgroundColor: "rgba(249,226,175,0.08)",
+                  fill: true,
+                  borderWidth: 1.5,
+                  pointRadius: 2,
+                  pointHoverRadius: 4,
+                  pointBackgroundColor: "#f9e2af",
+                  pointBorderWidth: 0,
+                  tension: 0.2,
+                },
+                {
+                  label: "Upper tolerance",
+                  data: th.timestamps.map(() => toleranceBand),
+                  borderColor: "rgba(243,139,168,0.55)",
+                  borderDash: [4, 4],
+                  fill: false,
+                  borderWidth: 1,
+                  pointRadius: 0,
+                  tension: 0,
+                },
+                {
+                  label: "Lower tolerance",
+                  data: th.timestamps.map(() => -toleranceBand),
+                  borderColor: "rgba(243,139,168,0.55)",
+                  borderDash: [4, 4],
+                  fill: false,
+                  borderWidth: 1,
+                  pointRadius: 0,
+                  tension: 0,
+                },
+                {
+                  label: "Parity",
+                  data: th.timestamps.map(() => 0),
+                  borderColor: "rgba(137,220,235,0.45)",
+                  borderDash: [2, 4],
+                  fill: false,
+                  borderWidth: 1,
+                  pointRadius: 0,
+                  tension: 0,
+                },
+              ],
+            },
+            options: chartOpts((v) =>
+              isTrackedStable(symbol)
+                ? `${v >= 0 ? "+" : ""}${Number(v).toFixed(1)} bps`
+                : `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`
+            ),
           }
         );
       }
@@ -2016,7 +2367,9 @@ ${makeMetricTile(
 )}
 ${makeMetricTile(
   "Bitflow Est. USD",
-  overview.estimatedUsd != null ? `$${fmtPrice(overview.estimatedUsd)}` : "—",
+  overview.estimatedUsd != null
+    ? `$${fmtTokenUsd(overview.baseSymbol, overview.estimatedUsd)}`
+    : "—",
   `Estimated USD for ${overview.tokens.base}`
 )}
 ${makeMetricTile(
@@ -2121,12 +2474,7 @@ ${makeMetricTile(
         destroyCharts();
 
         const labels = s.timestamps.map((t) => {
-          const d = new Date(t);
-          return d.toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          return fmtChartTime(t);
         });
 
         priceChart = new Chart(
@@ -2156,12 +2504,7 @@ ${makeMetricTile(
         const usdHistory = buildPoolUsdHistory(pid);
         if (usdHistory.timestamps.length >= 2) {
           const usdLabels = usdHistory.timestamps.map((t) => {
-            const d = new Date(t);
-            return d.toLocaleTimeString("en-US", {
-              hour12: false,
-              hour: "2-digit",
-              minute: "2-digit",
-            });
+            return fmtChartTime(t);
           });
 
           // Reference price: use latest token-level reference for this pool's base symbol
@@ -2205,7 +2548,7 @@ ${makeMetricTile(
             {
               type: "line",
               data: { labels: usdLabels, datasets: usdDatasets },
-              options: chartOpts((v) => "$" + fmtPrice(v)),
+              options: chartOpts((v) => "$" + fmtTokenUsd(baseSymbol, Number(v))),
             }
           );
         }

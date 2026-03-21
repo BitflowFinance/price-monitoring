@@ -412,13 +412,23 @@ cp .env.example .env
 npm start
 ```
 
+In a second terminal, use the same Node version for the dashboard:
+
+```bash
+nvm use
+npm run dashboard
+```
+
 Notes:
 
 - The repo includes `.nvmrc` and is tested with Node `18.20.8`.
 - `npm start` and `npm run dev` automatically load `.env` via `dotenv`.
+- Use `nvm use` before both `npm start` and `npm run dashboard`, so the collector and dashboard run on the same pinned Node version.
 - `.env` is ignored by Git.
-- The job runs immediately on startup, then every 30 minutes via cron.
+- The job runs immediately on startup, then every minute via cron. This is a temporary high-frequency collection setting.
 - Data is written to `data/snapshots.json` and `data/reports.json` (both created automatically).
+- `snapshots.json` stores raw ticker fetches over time.
+- `reports.json` stores pricing snapshots for every run plus interval comparison reports when lookback windows are available.
 
 ---
 
@@ -427,6 +437,7 @@ Notes:
 A single-file analytics dashboard is included at `dashboard.html`. It reads `data/snapshots.json` and `data/reports.json` via `fetch()` and must be served over HTTP (not opened as a local file).
 
 ```bash
+nvm use
 npm run dashboard
 # open the printed local URL (typically http://localhost:5000/dashboard)
 ```
@@ -434,6 +445,8 @@ npm run dashboard
 `npm run dashboard` uses the local `serve` dependency installed by `npm install`, so it does not rely on a one-off `npx` download.
 
 If port `5000` is already in use, `serve` will print a different local port.
+
+All dashboard timestamps are displayed in UTC.
 
 ### Home view
 

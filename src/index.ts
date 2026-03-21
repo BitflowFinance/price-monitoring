@@ -44,13 +44,25 @@ async function runJob(): Promise<void> {
   const dummyReport = { interval: 'current', snapshot_age_minutes: 0, snapshot_timestamp: runAt, pools: [], pricing: currentPricing };
   printPricingSummary(dummyReport);
 
+  // Persist a pricing-only "current" report on every run so the dashboard can
+  // render the latest token state immediately, even before any comparison
+  // interval (1m/30m/etc.) becomes available.
+  saveReport(
+    {
+      interval: "current",
+      snapshot_age_minutes: 0,
+      snapshot_timestamp: runAt,
+      pools: [],
+      pricing: currentPricing,
+    },
+    runAt
+  );
+
   // Load existing snapshots BEFORE saving the new one (so we compare against past data)
   const snapshots = loadSnapshots();
 
-  // Run variance reports for each interval.
-  // pricing is only attached to the first interval report per run to avoid
-  // storing 5 duplicate copies of the same PricingResult in reports.json.
-  let pricingSaved = false;
+  // Run variance reports for each interval. These reports intentionally omit
+  // pricing because the current pricing snapshot is already saved above.
   for (const { label, ms } of INTERVALS) {
     const ref = findClosestSnapshot(snapshots, ms);
     if (!ref) {
@@ -60,22 +72,18 @@ async function runJob(): Promise<void> {
     const refPricing = computePricing(ref.tickers, externalPrices);
     const report = computeVariance(tickers, ref, label, currentPricing, refPricing);
     printReport(report);
-    if (!pricingSaved) {
-      saveReport(report, runAt);
-      pricingSaved = true;
-    } else {
-      saveReport({ ...report, pricing: undefined }, runAt);
-    }
+    saveReport({ ...report, pricing: undefined }, runAt);
   }
 
   // Persist current snapshot after analysis
   saveSnapshot(tickers);
 }
 
-// Run immediately on startup, then every 30 minutes
+// Run immediately on startup, then every minute.
+// This is intentionally short-term to collect denser history.
 console.log("[cron] Ticker analytics starting...");
 runJob();
 
-cron.schedule("*/30 * * * *", () => {
+cron.schedule("* * * * *", () => {
   runJob().catch((err) => console.error("[cron] Unhandled error in job:", err));
 });
