@@ -55,10 +55,11 @@ A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes,
 
 The primary purpose of the pricing engine is to detect when any token's on-chain price diverges from its chosen reference benchmark. Each job run:
 
-1. Computes a **VWAP USD price** for every token from Bitflow pool data (following CoinGecko's methodology: convert each pool's price to USD via the target currency, then weight by volume)
-2. Fetches **market reference prices** from CoinGecko Pro API
-3. Computes **divergence %** between internal and reference prices
-4. Flags tokens that exceed their **tolerance threshold**
+1. Computes a **Bitflow-estimated USD price** for every tracked token from Bitflow pool data using a VWAP-style aggregation.
+2. Uses a **fixed `$1.00` benchmark** for tracked stablecoins (`aeUSDC`, `USDCx`, `USDh`).
+3. Fetches **CoinGecko reference prices** for non-pegged assets like `STX` and `sBTC` when `COINGECKO_API_KEY` is available.
+4. Computes **divergence %** between internal and reference prices.
+5. Flags tokens that exceed their **tolerance threshold**.
 
 ### Tolerance thresholds
 
@@ -72,9 +73,9 @@ The primary purpose of the pricing engine is to detect when any token's on-chain
 
 ### Price resolution strategy
 
-**Direct** — pools where the target currency is a stablecoin (aeUSDC, USDCx, USDh):
+**Direct** — pools where the target currency is a tracked stablecoin (`aeUSDC`, `USDCx`, `USDh`):
 ```
-base_price_usd = scaleBinPrice(last_price, decimalsX, decimalsY) × external_stablecoin_price
+base_price_usd = scaleBinPrice(last_price, decimalsX, decimalsY) × stablecoin_reference_price_usd
 ```
 
 **Cross-pair** — pools where the target is a crypto (currently STX/sBTC):
@@ -84,6 +85,16 @@ stx_price_usd = scaleBinPrice(last_price, decimalsX, decimalsY) × sbtc_vwap_usd
 sBTC's VWAP is established first from direct-resolution pools, then used as a bridge.
 
 > Tracked stablecoins (`aeUSDC`, `USDCx`, `USDh`) are benchmarked against a fixed `$1.00` peg. Direct pool USD conversion through those quote assets also assumes the peg, which avoids circularly reusing CoinGecko prices that may themselves come from Bitflow.
+
+### Coverage caveat
+
+This repo only analyzes pools exposed by the upstream Bitflow BFF ticker feed:
+
+```
+/api/app/v1/tickers
+```
+
+It does not merge additional Bitflow pool sources on its own. If that feed only exposes DLMM / HODLMM pools at a given time, the analytics and dashboard will only reflect those pools.
 
 ---
 
@@ -154,7 +165,7 @@ Timeline (each mark = one 30min snapshot)
 
 ## Storage model
 
-Two flat JSON arrays are written under `data/`. Both are pruned on every write to keep only entries within a **25-hour rolling window**.
+Two flat JSON arrays are written under `data/`. Both files are created automatically on startup if they do not exist.
 
 ```
 snapshots.json
@@ -167,7 +178,7 @@ snapshots.json
 │   ...                                                   │
 │   { "timestamp": "2026-03-14T00:30:00.000Z", ... }  ◄─ newest
 │ ]                                                       │
-│  Entries older than 25h are pruned on each save         │
+│  New snapshots are appended on each run                 │
 └─────────────────────────────────────────────────────────┘
 
 reports.json
@@ -187,9 +198,11 @@ reports.json
 │   },                                                    │
 │   ...                                                   │
 │ ]                                                       │
-│  Entries older than 25h are pruned on each save         │
+│  New reports are appended on each save                  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+> There is currently no built-in retention policy. Long-running deployments should add an external cleanup step or implement pruning in `src/storage.ts`.
 
 ### Snapshot lookup
 
@@ -415,52 +428,70 @@ A single-file analytics dashboard is included at `dashboard.html`. It reads `dat
 
 ```bash
 npm run dashboard
-# open http://localhost:5000/dashboard.html
+# open the printed local URL (typically http://localhost:5000/dashboard)
 ```
 
 `npm run dashboard` uses the local `serve` dependency installed by `npm install`, so it does not rely on a one-off `npx` download.
 
-### Token Price Bar (always visible)
+If port `5000` is already in use, `serve` will print a different local port.
 
-A row of cards at the top of every view, one per token (STX, sBTC, aeUSDC, USDCx, USDh), showing:
+### Home view
 
-- VWAP internal USD price
-- Reference price
-- Divergence % — green (within tolerance), orange (>50% of tolerance), red (divergent, ⚠)
+The home view is organized into five sections:
 
-Cards with active divergence get a red border. Click any card to open the **Token VWAP History** view.
+- **Health Snapshot** — top-level status cards for active alerts, last update time, and tracked pool count / feed coverage.
+- **Peg Monitor** — primary cards for `aeUSDC`, `USDCx`, and `USDh`, showing Bitflow-estimated USD, `$1.00` benchmark, tolerance, and alert state.
+- **Market Tokens** — separate cards for `STX` and `sBTC`, showing Bitflow-estimated USD versus CoinGecko benchmark prices.
+- **Alerts & Notes / Top Pool Movers** — a conclusion-oriented summary instead of forcing the reader to infer status from raw cards alone.
+- **Pool Explorer** — a table for all tracked pools.
 
-### Pool Grid (home view)
+### Price language used in the dashboard
 
-Pool cards in a responsive grid, each showing:
+The dashboard deliberately separates three different concepts:
 
-- Pool ID and token pair (e.g. STX/USDCx)
-- Current price, liquidity in USD, and base token USD price
-- 30-minute price Δ% and volume Δ% badges (green / red / gray)
-- Mini sparkline of the full price history
+- **AMM Pair Price** — the raw quote from a single Bitflow pool, for example `1 STX = 0.2469 USDCx`.
+- **Bitflow Est. USD** — the repo's translated USD price for the base token, derived from the tracked Bitflow pool set.
+- **Benchmark** — the comparison anchor used for alerts:
+  - fixed `$1.00` peg for `aeUSDC`, `USDCx`, and `USDh`
+  - CoinGecko market price for `STX` and `sBTC`
 
-Click any card to drill into the detail view.
+Token cards emphasize **Bitflow Est. USD** and **Benchmark** because a token can aggregate across multiple pools. Pool rows and pool detail screens show all three values side by side.
+
+### Pool Explorer
+
+Each row in the **Pool Explorer** shows:
+
+- Pool pair and pool ID
+- Raw **AMM Pair Price**
+- **Bitflow Est. USD** for the base token
+- Token-level **Benchmark**
+- Latest liquidity
+- 30-minute price and volume change
+
+Click any row to drill into the detail view.
 
 ### Pool Detail view
 
 | Section | Contents |
 |---------|----------|
-| Header | Pool ID, pair name, current price, last updated |
+| Header | Pool ID, pair name, current pair price, last updated |
+| Summary strip | AMM Pair Price, Bitflow Est. USD, Benchmark, Liquidity |
 | Variance table | Rows for each interval (30min / 2h / 6h / 12h / 24h), columns for price Δ%, **USD price Δ%**, base volume Δ%, target volume Δ% — colored by magnitude |
-| Price history | Line chart across all stored snapshots |
-| USD Price history | Line chart of base token USD price over time, with the token reference as a dashed line |
+| AMM Pair Price history | Line chart across all stored snapshots |
+| Bitflow-estimated USD history | Line chart of base token USD price over time, with the token benchmark as a dashed line |
 | Volume history | Line chart with base volume and target volume as separate datasets |
 | Activity log | All report entries for the pool, newest first, formatted like the console output |
 
-### Token VWAP History view
+### Token detail view
 
-Opened by clicking a token card in the price bar. Shows:
+Opened by clicking a token monitor card. Shows:
 
-- VWAP internal price over time (line chart)
-- Latest reference price as a flat dashed line
+- Summary strip with Bitflow Est. USD, Benchmark, and Deviation
+- Internal price history over time
+- Latest benchmark price as a flat dashed line
 - Current divergence % and tolerance in the header
 
-The back button returns to the grid. All views auto-refresh every 60 seconds (countdown shown in the header).
+The back button returns to the home view. All views auto-refresh every 60 seconds (countdown shown in the header).
 
 ### Requirements
 
