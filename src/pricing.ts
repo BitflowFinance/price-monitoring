@@ -2,6 +2,7 @@ import { Ticker, PoolPriceUSD, AggregatedPrice, PricingResult } from "./types.js
 import {
   FIXED_REFERENCE_PRICE_USD,
   isStablecoin,
+  TRACKED_SYMBOLS,
   tokenSymbol,
   TOLERANCE_PCT,
 } from "./tokens.js";
@@ -63,7 +64,7 @@ export function computePricing(
       resolution:    basePriceUsd != null ? 'direct' : 'failed',
     });
 
-    const targetVolumeUsd = parseFloat(ticker.target_volume) / Math.pow(10, decimalsY) * (targetUsd ?? 1);
+    const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetUsd ?? 1);
 
     if (basePriceUsd != null) {
       // Volume in USD (target is a stablecoin)
@@ -76,8 +77,11 @@ export function computePricing(
   }
 
   // ── Phase 2: Cross-pair resolution (crypto-target pools) ──────────────────
-  // Compute sBTC VWAP from Phase 1 results first (needed for STX/sBTC)
+  // Compute tracked anchor VWAPs from direct stablecoin paths first. These let
+  // STX/sBTC and similar pairs contribute even when they arrive in either
+  // orientation from the feed.
   const sbtcVwap = vwap(vwapEntries['sBTC'] ?? []);
+  const stxVwap = vwap(vwapEntries['STX'] ?? []);
 
   for (const ticker of tickers) {
     if (isStablecoin(ticker.target_currency)) continue;
@@ -90,10 +94,17 @@ export function computePricing(
 
     let basePriceUsd: number | null = null;
     let resolution: PoolPriceUSD['resolution'] = 'failed';
+    let targetPriceUsd: number | null = null;
 
     if (targetSymbol === 'sBTC' && sbtcVwap != null) {
-      basePriceUsd = scaledPrice * sbtcVwap;
-      resolution   = 'cross-pair';
+      targetPriceUsd = sbtcVwap;
+    } else if (targetSymbol === 'STX' && stxVwap != null) {
+      targetPriceUsd = stxVwap;
+    }
+
+    if (targetPriceUsd != null) {
+      basePriceUsd = scaledPrice * targetPriceUsd;
+      resolution = 'cross-pair';
     }
     // Future: additional cross-pair paths can be added here
 
@@ -108,8 +119,8 @@ export function computePricing(
     });
 
     if (basePriceUsd != null) {
-      // Volume in USD (target is sBTC)
-      const targetVolumeUsd = parseFloat(ticker.target_volume) / Math.pow(10, decimalsY) * (sbtcVwap ?? 0);
+      // Volume in USD using the tracked anchor on the quote side.
+      const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetPriceUsd ?? 0);
       if (!vwapEntries[baseSymbol]) vwapEntries[baseSymbol] = [];
       vwapEntries[baseSymbol].push({ price: basePriceUsd, volumeUsd: targetVolumeUsd });
     }
@@ -131,19 +142,16 @@ export function computePricing(
   }
 
   // ── Phase 3: VWAP aggregation ──────────────────────────────────────────────
-  // Collect all unique symbols that appeared in any pool (base or target)
-  const allSymbols = new Set<string>();
-  for (const pp of poolPrices) {
-    allSymbols.add(pp.base_symbol);
-    allSymbols.add(pp.target_symbol);
-  }
-
   const aggregated: AggregatedPrice[] = [];
 
-  // Count failed pool resolutions for warnings
-  const failedPoolCount = poolPrices.filter(pp => pp.resolution === 'failed').length;
+  const unsupportedPoolCountBySymbol = poolPrices.reduce<Record<string, number>>((acc, pool) => {
+    if (pool.resolution === 'failed' && TRACKED_SYMBOLS.includes(pool.base_symbol as typeof TRACKED_SYMBOLS[number])) {
+      acc[pool.base_symbol] = (acc[pool.base_symbol] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
 
-  for (const symbol of allSymbols) {
+  for (const symbol of TRACKED_SYMBOLS) {
     const entries  = vwapEntries[symbol] ?? [];
     const internal = vwap(entries);
     const fixedReference = FIXED_REFERENCE_PRICE_USD[symbol];
@@ -163,6 +171,7 @@ export function computePricing(
 
     const poolCount      = entries.length;
     const totalVolumeUsd = entries.reduce((s, e) => s + e.volumeUsd, 0);
+    const unsupportedPoolCount = unsupportedPoolCountBySymbol[symbol] ?? 0;
 
     // Determine resolution type
     let resolution: AggregatedPrice['resolution'];
@@ -188,8 +197,13 @@ export function computePricing(
     if (totalVolumeUsd === 0 && entries.length > 0) {
       warnings.push('No recent trading volume');
     }
-    if (failedPoolCount > 0) {
-      warnings.push(`Price resolution failed for ${failedPoolCount} pool(s) — external price unavailable for target stablecoin`);
+    if (unsupportedPoolCount > 0) {
+      const poolWord = unsupportedPoolCount === 1 ? 'pool is' : 'pools are';
+      const assetWord =
+        unsupportedPoolCount === 1 ? 'its quote asset lacks' : 'their quote assets lack';
+      warnings.push(
+        `${unsupportedPoolCount} visible ${poolWord} excluded from the ${symbol} USD estimate because ${assetWord} a supported benchmark path`
+      );
     }
     if (isDivergent && divergencePct != null) {
       const tolerance = TOLERANCE_PCT[symbol] ?? 2;
@@ -211,6 +225,7 @@ export function computePricing(
       is_divergent:       isDivergent,
       pool_count:         poolCount,
       total_volume_usd:   totalVolumeUsd,
+      unsupported_pool_count: unsupportedPoolCount,
       resolution,
       warnings,
     });

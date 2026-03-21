@@ -1,6 +1,6 @@
 # ticker-analytics
 
-A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes, persists it as a rolling time-series, reports price and volume variance across multiple lookback windows, and monitors for depeg events by comparing on-chain VWAP prices against reference benchmarks.
+A Node.js/TypeScript cron job that fetches Bitflow ticker data every minute, persists it as a rolling time-series, reports price and volume variance across multiple lookback windows, and monitors for depeg events by comparing on-chain VWAP prices against reference benchmarks.
 
 ---
 
@@ -8,10 +8,10 @@ A Node.js/TypeScript cron job that fetches Bitflow ticker data every 30 minutes,
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        node-cron  (*/30 * * * *)                │
+│                        node-cron  (* * * * *)                   │
 │                                                                 │
 │   On startup ──────────────────────────────────────────────┐   │
-│   Every 30min ─────────────────────────────────────────────┘   │
+│   Every minute ────────────────────────────────────────────┘   │
 │                              │                                  │
 │                              ▼                                  │
 │                      [ runJob() ]                               │
@@ -88,13 +88,14 @@ sBTC's VWAP is established first from direct-resolution pools, then used as a br
 
 ### Coverage caveat
 
-This repo only analyzes pools exposed by the upstream Bitflow BFF ticker feed:
+This repo currently merges two Bitflow pool feeds on its own:
 
 ```
-/api/app/v1/tickers
+https://api.bitflowapis.finance/ticker
+https://bff.bitflowapis.finance/api/app/v1/tickers
 ```
 
-It does not merge additional Bitflow pool sources on its own. If that feed only exposes DLMM / HODLMM pools at a given time, the analytics and dashboard will only reflect those pools.
+The first is the live classic-pools feed. The second is the newer HODLMM / DLMM feed. The dashboard combines both by default and lets you scope the pool-oriented views to `Classic only`, `HODLMM only`, or `All pools`.
 
 ---
 
@@ -103,22 +104,21 @@ It does not merge additional Bitflow pool sources on its own. If that feed only 
 Variance is computed by comparing the current fetch against the **snapshot closest in time** to each lookback target:
 
 ```
-Timeline (each mark = one 30min snapshot)
+Timeline (each mark = one 1min snapshot)
 
   T-24h   T-12h    T-6h     T-2h  T-30m  NOW
     │        │        │        │      │    │
-────●────────●────────●────────●──●──●────●────▶
-    └────────┴────────┴────────┴──┴──┘
-             compared intervals
+────●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●▶
+            compared intervals
 ```
 
-| Interval | Snapshots back | Tolerance |
-|----------|----------------|-----------|
-| 30min    | 1              | ±10 min   |
-| 2h       | 4              | ±10 min   |
-| 6h       | 12             | ±10 min   |
-| 12h      | 24             | ±10 min   |
-| 24h      | 48             | ±10 min   |
+| Interval | Approx. snapshots back | Tolerance |
+|----------|------------------------|-----------|
+| 30min    | 30                     | ±10 min   |
+| 2h       | 120                    | ±10 min   |
+| 6h       | 360                    | ±10 min   |
+| 12h      | 720                    | ±10 min   |
+| 24h      | 1440                   | ±10 min   |
 
 > If no snapshot exists within the tolerance window, the interval is skipped silently. This handles cold starts and missed runs gracefully.
 
@@ -128,18 +128,20 @@ Timeline (each mark = one 30min snapshot)
 
 ```
   ┌──────────────────────────────┐    ┌───────────────────────────────┐
-  │   Bitflow BFF API            │    │   CoinGecko Pro API           │
-  │   /api/app/v1/tickers        │    │   /api/v3/simple/price        │
+  │   Bitflow Classic API        │    │   Bitflow HODLMM API          │
+  │   /ticker                    │    │   /api/app/v1/tickers         │
   └──────────────┬───────────────┘    └───────────────┬───────────────┘
                  │  GET (15s timeout)                  │  GET (15s timeout)
-                 ▼                                     ▼
-          [ fetcher.ts ]                   [ external-prices.ts ]
-                 │                                     │
-      Ticker[]   │                  Record<symbol,USD> │
                  └───────────────┬─────────────────────┘
                                  ▼
-                          [ pricing.ts ]
-                          computePricing()
+                          [ fetcher.ts ]
+                          normalize + merge
+                                 │
+      Ticker[]                   │                   Record<symbol,USD>
+                                 │                           ▲
+                                 ▼                           │
+                          [ pricing.ts ]        [ external-prices.ts ]
+                          computePricing()                     
                                  │
                    PricingResult │  (pool_prices[], aggregated[])
                                  ▼
@@ -372,7 +374,7 @@ src/
 ================================================================================
   Job run at: 2026-03-13T15:00:00.000Z
 ================================================================================
-[fetcher] Fetched 7 tickers.
+[fetcher] Fetched 52 tickers.
 [external-prices] Fetched 5 reference prices.
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -450,13 +452,14 @@ All dashboard timestamps are displayed in UTC.
 
 ### Home view
 
-The home view is organized into five sections:
+The home view is organized into six sections:
 
 - **Health Snapshot** — top-level status cards for active alerts, last update time, and tracked pool count / feed coverage.
 - **Peg Monitor** — primary cards for `aeUSDC`, `USDCx`, and `USDh`, showing Bitflow-estimated USD, `$1.00` benchmark, tolerance, and alert state.
 - **Market Tokens** — separate cards for `STX` and `sBTC`, showing Bitflow-estimated USD versus CoinGecko benchmark prices.
+- **Pool Views filter** — scopes Top Pool Movers, Pool Explorer, and token contributing-pool tables to `All pools`, `HODLMM only`, or `Classic only`. Token cards remain combined across all active feeds.
 - **Alerts & Notes / Top Pool Movers** — a conclusion-oriented summary instead of forcing the reader to infer status from raw cards alone.
-- **Pool Explorer** — a table for all tracked pools.
+- **Pool Explorer** — a table for tracked base-token pools with valid live quotes.
 
 ### Price language used in the dashboard
 
@@ -503,6 +506,7 @@ Opened by clicking a token monitor card. Shows:
 - Internal price history over time
 - Latest benchmark price as a flat dashed line
 - Current divergence % and tolerance in the header
+- Contributing-pool table filtered by the current pool-source view, while the headline token estimate remains combined across all active feeds
 
 The back button returns to the home view. All views auto-refresh every 60 seconds (countdown shown in the header).
 
@@ -515,10 +519,10 @@ The back button returns to the home view. All views auto-refresh every 60 second
 ## Cron expression
 
 ```
-*/30 * * * *
+* * * * *
   │   │ │ │ └─ every day of week
   │   │ │ └─── every month
   │   │ └───── every day of month
   │   └─────── every hour
-  └─────────── every 30 minutes  (0 and 30)
+  └─────────── every minute
 ```

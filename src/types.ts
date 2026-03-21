@@ -11,6 +11,7 @@ export interface Ticker {
   ask: string;
   high: string;
   low: string;
+  source?: "classic" | "hodlmm";
 }
 
 export interface Snapshot {
@@ -67,6 +68,7 @@ export interface AggregatedPrice {
   is_divergent: boolean;
   pool_count: number;
   total_volume_usd: number;
+  unsupported_pool_count: number;
   resolution: 'vwap' | 'implied' | 'unavailable';
   warnings: string[];
 }

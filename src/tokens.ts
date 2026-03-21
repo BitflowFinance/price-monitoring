@@ -14,6 +14,7 @@ export function isStablecoin(currency: string): boolean {
 
 // Maps contract-name → human-readable symbol
 export const CONTRACT_TO_SYMBOL: Record<string, string> = {
+  STX: "STX",
   "token-stx-v-1-2": "STX",
   "sbtc-token": "sBTC",
   "token-aeusdc": "aeUSDC",
@@ -45,6 +46,8 @@ export const FIXED_REFERENCE_PRICE_USD: Record<string, number> = {
   USDCx: 1,
   USDh: 1,
 };
+
+export const TRACKED_SYMBOLS = ["STX", "sBTC", "aeUSDC", "USDCx", "USDh"] as const;
 
 // CoinGecko API IDs for external price lookup
 export const COINGECKO_IDS: Record<string, string> = {
