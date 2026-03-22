@@ -711,6 +711,7 @@
         pointer-events: none;
       }
       .explorer-table tr:hover .pool-link-btn,
+      .token-pool-table tr:hover .pool-link-btn,
       .pool-link-btn:focus-visible {
         opacity: 1;
         pointer-events: auto;
@@ -783,23 +784,31 @@
       }
       .token-pool-table th:nth-child(1),
       .token-pool-table td:nth-child(1) {
-        width: 34%;
+        width: 21%;
       }
       .token-pool-table th:nth-child(2),
       .token-pool-table td:nth-child(2) {
-        width: 19%;
+        width: 8%;
       }
       .token-pool-table th:nth-child(3),
       .token-pool-table td:nth-child(3) {
-        width: 16%;
+        width: 10%;
       }
       .token-pool-table th:nth-child(4),
       .token-pool-table td:nth-child(4) {
-        width: 13%;
+        width: 20%;
       }
       .token-pool-table th:nth-child(5),
       .token-pool-table td:nth-child(5) {
-        width: 18%;
+        width: 16%;
+      }
+      .token-pool-table th:nth-child(6),
+      .token-pool-table td:nth-child(6) {
+        width: 14%;
+      }
+      .token-pool-table th:nth-child(7),
+      .token-pool-table td:nth-child(7) {
+        width: 11%;
       }
       .token-pool-table .pair-sub,
       .token-pool-table .cell-sub {
@@ -1429,7 +1438,7 @@
     <header class="app-header">
       <div class="header-main">
         <div class="header-eyebrow">Bitflow Analytics</div>
-        <h1>Stablecoin and Market Monitor</h1>
+        <h1>Bitflow Price Monitoring</h1>
         <div class="header-copy">
           Combined classic and HODLMM pool coverage for peg checks, market-reference tracking,
           and pool-level drilldowns across the Bitflow ticker feeds.
@@ -1456,7 +1465,7 @@
           <div>
             <div class="section-kicker">Pool Type View</div>
             <div class="filter-note">
-              Choose which pool set drives the dashboard. Stablecoin Monitor, Market Tokens,
+              Choose which pool set drives the dashboard. Stablecoins, Market Tokens,
               alerts, movers, and token detail views all update to this selection.
             </div>
           </div>
@@ -1470,7 +1479,7 @@
           <div class="home-section-head">
             <div>
               <div class="section-kicker">Stablecoins</div>
-              <h2>Stablecoin Monitor</h2>
+              <h2>Stablecoins</h2>
               <p>Bitflow-estimated USD versus fixed $1.00 benchmarks.</p>
             </div>
           </div>
@@ -1572,17 +1581,19 @@
         <div class="section">
           <h3>Contributing Pools</h3>
           <div class="section-note" id="t-pools-note">
-            Each row shows the pool quote, the translated token USD estimate, and the benchmark used in this view.
+            Rows are ranked by current VWAP weight. The token benchmark is shown once above in the summary strip.
           </div>
           <div class="pool-table-wrap">
             <table class="pool-table token-pool-table">
               <thead>
                 <tr>
                   <th>Pool</th>
+                  <th>Source</th>
+                  <th>Method</th>
                   <th>AMM Pair Price</th>
                   <th>Token USD via Pool</th>
-                  <th>Benchmark</th>
-                  <th>Liquidity / 30m</th>
+                  <th>Liquidity</th>
+                  <th>VWAP Weight</th>
                 </tr>
               </thead>
               <tbody id="token-pool-body"></tbody>
@@ -1685,6 +1696,8 @@
       let selectedToken = null;
       let poolSourceFilter = "all";
       let poolSearchQuery = "";
+      let poolContractCache = {};
+      let poolContractPending = new Set();
       let priceChart = null;
       let volChart = null;
       let usdPriceChart = null;
@@ -1832,14 +1845,47 @@
 
       function getPoolContractId(poolId) {
         if (!poolId) return null;
-        return poolId.includes(".") ? poolId : null;
+        if (poolId.includes(".")) return poolId;
+        return poolContractCache[poolId] ?? null;
       }
 
       function getPoolExplorerUrl(poolId) {
         const contractId = getPoolContractId(poolId);
         return contractId
-          ? `https://explorer.hiro.so/txid/${encodeURIComponent(contractId)}`
+          ? `https://explorer.hiro.so/address/${encodeURIComponent(contractId)}?chain=mainnet`
           : null;
+      }
+
+      async function ensurePoolContracts(poolIds) {
+        const targets = Array.from(new Set(poolIds))
+          .filter((poolId) => poolId && !poolId.includes("."))
+          .filter((poolId) => getPoolSource(poolId) === "hodlmm")
+          .filter((poolId) => !poolContractCache[poolId] && !poolContractPending.has(poolId));
+
+        if (!targets.length) return;
+
+        await Promise.all(
+          targets.map(async (poolId) => {
+            poolContractPending.add(poolId);
+            try {
+              const res = await fetch(
+                `https://bff.bitflowapis.finance/api/app/v1/pools/${encodeURIComponent(poolId)}`
+              );
+              if (!res.ok) return;
+              const data = await res.json();
+              if (typeof data?.poolContract === "string" && data.poolContract.includes(".")) {
+                poolContractCache[poolId] = data.poolContract;
+              }
+            } catch (_) {
+              // Ignore link enrichment failures; the row still works without the external link.
+            } finally {
+              poolContractPending.delete(poolId);
+            }
+          })
+        );
+
+        if (currentView === "grid") renderPoolTable();
+        else if (currentView === "token" && selectedToken) renderTokenDetail(selectedToken);
       }
 
       function getReferenceOnlyLabel(agg) {
@@ -2737,8 +2783,10 @@
       // ══════════════════════════════════════════════════════
       function formatPct(pct, dp = 2) {
         if (pct == null || isNaN(pct)) return "—";
+        const a = Math.abs(pct);
+        const displayDp = a > 0 && a < 0.01 ? Math.max(dp, 4) : a < 0.1 ? Math.max(dp, 3) : dp;
         const sign = pct >= 0 ? "+" : "";
-        return `${sign}${pct.toFixed(dp)}%`;
+        return `${sign}${pct.toFixed(displayDp)}%`;
       }
 
       function makeMetricTile(label, value, sub = "", valueClass = "") {
@@ -3025,6 +3073,7 @@
             const bAlert = b.poolIsAlert ? 1 : 0;
             return bAlert - aAlert || (b.liquidity ?? 0) - (a.liquidity ?? 0);
           });
+        void ensurePoolContracts(rows.map((pool) => pool.pid));
 
         if (!rows.length) {
           body.innerHTML =
@@ -3188,6 +3237,7 @@ ${makeMetricTile(
         const contributorRows = getTokenContributingPools(symbol);
         const poolNoteEl = document.getElementById("t-pools-note");
         const poolBodyEl = document.getElementById("token-pool-body");
+        void ensurePoolContracts(contributorRows.map((row) => row.pool_id));
         if (poolNoteEl) {
           const filterNote =
             poolSourceFilter === "all"
@@ -3207,17 +3257,26 @@ ${makeMetricTile(
                 .map(
                   (row) => `<tr class="clickable" onclick="showDetail('${row.pool_id}')">
   <td data-label="Pool">
-    <div class="pair-main">${row.pair}</div>
-    <div class="token-pool-meta">
-      <span class="contrib-chip ${row.contributionTone}">${row.contributionType}</span>
-      <span class="monitor-chip neutral">${row.sourceLabel}</span>
+    <div class="pool-main-row" title="${row.note} · ${
+                    getPoolContractId(row.pool_id)
+                      ? `Contract ID: ${getPoolContractId(row.pool_id)}`
+                      : `Pool ref: ${row.pool_id}`
+                  }">
+      <div class="pair-main">${row.pair}</div>
       ${
-        row.contributionShare != null
-          ? `<span class="monitor-chip neutral">${fmtShare(row.contributionShare)} wt</span>`
+        getPoolExplorerUrl(row.pool_id)
+          ? `<a class="pool-link-btn" href="${getPoolExplorerUrl(
+              row.pool_id
+            )}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" title="Open in Hiro Explorer">↗</a>`
           : ""
       }
     </div>
-    <div class="pair-sub">${row.note} · ${row.pool_id}</div>
+  </td>
+  <td data-label="Source">
+    <div class="cell-main">${row.sourceLabel}</div>
+  </td>
+  <td data-label="Method">
+    <span class="contrib-chip ${row.contributionTone}">${row.contributionType}</span>
   </td>
   <td data-label="AMM Pair Price">
     <div class="cell-main">${row.ammLabel}</div>
@@ -3225,21 +3284,16 @@ ${makeMetricTile(
   <td data-label="Token USD via Pool">
     <div class="cell-main emphasis">$${fmtTokenUsd(symbol, row.tokenUsd)}</div>
   </td>
-  <td data-label="Benchmark">
-    <div class="cell-main">${row.benchmark != null ? `$${fmtPrice(row.benchmark)}` : "—"}</div>
-  </td>
-  <td data-label="Liquidity / 30m">
+  <td data-label="Liquidity">
     <div class="cell-main">$${fmtNum(row.liquidity ?? 0)}</div>
-    <div class="cell-sub">${
-      row.priceChangePct != null
-        ? `30m price ${formatPct(row.priceChangePct)}`
-        : "Latest reported liquidity"
-    }</div>
+  </td>
+  <td data-label="VWAP Weight">
+    <div class="cell-main">${fmtShare(row.contributionShare)}</div>
   </td>
 </tr>`
                 )
                 .join("")
-            : '<tr><td colspan="5" style="color:var(--text-dim)">Nothing visible for this token in the current pool view.</td></tr>';
+            : '<tr><td colspan="7" style="color:var(--text-dim)">Nothing visible for this token in the current pool view.</td></tr>';
         }
 
         const th = tokenHistory[symbol];
@@ -3465,7 +3519,13 @@ ${makeMetricTile(
       function vcClass(pct) {
         if (pct == null || isNaN(pct)) return "vc-null";
         const a = Math.abs(pct);
-        if (a === 0) return "vc-zero";
+        const rounded =
+          a > 0 && a < 0.01
+            ? Number(pct.toFixed(4))
+            : a < 0.1
+            ? Number(pct.toFixed(3))
+            : Number(pct.toFixed(2));
+        if (rounded === 0) return "vc-zero";
         if (a < 1) return pct > 0 ? "vc-tp" : "vc-tn";
         if (a < 5) return pct > 0 ? "vc-mp" : "vc-mn";
         return pct > 0 ? "vc-bp" : "vc-bn";
