@@ -427,7 +427,7 @@ Notes:
 - `npm start` and `npm run dev` automatically load `.env` via `dotenv`.
 - Use `nvm use` before both `npm start` and `npm run dashboard`, so the collector and dashboard run on the same pinned Node version.
 - `.env` is ignored by Git.
-- The job runs immediately on startup, then every minute via cron. This is a temporary high-frequency collection setting.
+- The job runs immediately on startup, then every minute via cron.
 - Data is written to `data/snapshots.json` and `data/reports.json` (both created automatically).
 - `snapshots.json` stores raw ticker fetches over time.
 - `reports.json` stores pricing snapshots for every run plus interval comparison reports when lookback windows are available.
@@ -441,12 +441,12 @@ A single-file analytics dashboard is included at `dashboard.html`. It reads `dat
 ```bash
 nvm use
 npm run dashboard
-# open the printed local URL (typically http://localhost:5000/dashboard)
+# open the printed local URL (typically http://localhost:5051/dashboard.html)
 ```
 
 `npm run dashboard` uses the local `serve` dependency installed by `npm install`, so it does not rely on a one-off `npx` download.
 
-If port `5000` is already in use, `serve` will print a different local port.
+The default dashboard port is `5051`. If `5051` is already in use, `serve` will print a different local port.
 
 All dashboard timestamps are displayed in UTC.
 

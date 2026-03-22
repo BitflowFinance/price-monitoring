@@ -11,7 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start:compiled": "node dist/index.js",
-    "dashboard": "serve . -l 5000"
+    "dashboard": "serve . -l 5051"
   },
   "dependencies": {
     "dotenv": "^17.3.1",

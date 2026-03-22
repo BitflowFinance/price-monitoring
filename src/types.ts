@@ -54,6 +54,7 @@ export interface PoolPriceUSD {
   target_symbol: string;
   scaled_price: number;
   base_price_usd: number | null;
+  contribution_volume_usd?: number | null;
   resolution: 'direct' | 'cross-pair' | 'failed';
 }
 

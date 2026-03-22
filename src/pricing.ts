@@ -53,6 +53,7 @@ export function computePricing(
     const targetUsd =
       FIXED_REFERENCE_PRICE_USD[targetSymbol] ?? externalPrices[targetSymbol] ?? null;
     const basePriceUsd = targetUsd != null ? scaledPrice * targetUsd : null;
+    const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetUsd ?? 1);
 
     poolPrices.push({
       pool_id:       ticker.pool_id,
@@ -61,10 +62,9 @@ export function computePricing(
       target_symbol: targetSymbol,
       scaled_price:  scaledPrice,
       base_price_usd: basePriceUsd,
+      contribution_volume_usd: basePriceUsd != null ? targetVolumeUsd : null,
       resolution:    basePriceUsd != null ? 'direct' : 'failed',
     });
-
-    const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetUsd ?? 1);
 
     if (basePriceUsd != null) {
       // Volume in USD (target is a stablecoin)
@@ -95,6 +95,7 @@ export function computePricing(
     let basePriceUsd: number | null = null;
     let resolution: PoolPriceUSD['resolution'] = 'failed';
     let targetPriceUsd: number | null = null;
+    let targetVolumeUsd: number | null = null;
 
     if (targetSymbol === 'sBTC' && sbtcVwap != null) {
       targetPriceUsd = sbtcVwap;
@@ -105,6 +106,7 @@ export function computePricing(
     if (targetPriceUsd != null) {
       basePriceUsd = scaledPrice * targetPriceUsd;
       resolution = 'cross-pair';
+      targetVolumeUsd = parseFloat(ticker.target_volume) * targetPriceUsd;
     }
     // Future: additional cross-pair paths can be added here
 
@@ -115,14 +117,14 @@ export function computePricing(
       target_symbol: targetSymbol,
       scaled_price:  scaledPrice,
       base_price_usd: basePriceUsd,
+      contribution_volume_usd: targetVolumeUsd,
       resolution,
     });
 
     if (basePriceUsd != null) {
       // Volume in USD using the tracked anchor on the quote side.
-      const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetPriceUsd ?? 0);
       if (!vwapEntries[baseSymbol]) vwapEntries[baseSymbol] = [];
-      vwapEntries[baseSymbol].push({ price: basePriceUsd, volumeUsd: targetVolumeUsd });
+      vwapEntries[baseSymbol].push({ price: basePriceUsd, volumeUsd: targetVolumeUsd ?? 0 });
     }
   }
 

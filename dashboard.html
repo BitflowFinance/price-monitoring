@@ -574,6 +574,31 @@
         border-radius: 14px;
         padding: 4px 10px;
       }
+      .explorer-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin: -2px 0 12px;
+      }
+      .explorer-search {
+        width: min(320px, 100%);
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(95, 108, 138, 0.18);
+        background: rgba(9, 12, 19, 0.74);
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--font-mono);
+        outline: none;
+      }
+      .explorer-search::placeholder {
+        color: var(--text-dim);
+      }
+      .explorer-search:focus {
+        border-color: rgba(137, 220, 235, 0.35);
+        box-shadow: 0 0 0 1px rgba(137, 220, 235, 0.18);
+      }
       .pool-table {
         width: 100%;
         border-collapse: collapse;
@@ -606,6 +631,96 @@
       }
       .pool-table tr.clickable:hover {
         background: rgba(137, 220, 235, 0.04);
+      }
+      .explorer-table-wrap {
+        overflow-x: visible;
+      }
+      .explorer-table {
+        table-layout: fixed;
+      }
+      .explorer-table th {
+        white-space: normal;
+      }
+      .explorer-table th:nth-child(1),
+      .explorer-table td:nth-child(1) {
+        width: 20%;
+      }
+      .explorer-table th:nth-child(2),
+      .explorer-table td:nth-child(2) {
+        width: 9%;
+      }
+      .explorer-table th:nth-child(3),
+      .explorer-table td:nth-child(3) {
+        width: 14%;
+      }
+      .explorer-table th:nth-child(4),
+      .explorer-table td:nth-child(4) {
+        width: 14%;
+      }
+      .explorer-table th:nth-child(5),
+      .explorer-table td:nth-child(5) {
+        width: 10%;
+      }
+      .explorer-table th:nth-child(6),
+      .explorer-table td:nth-child(6) {
+        width: 9%;
+      }
+      .explorer-table th:nth-child(7),
+      .explorer-table td:nth-child(7) {
+        width: 10%;
+      }
+      .explorer-table th:nth-child(8),
+      .explorer-table td:nth-child(8) {
+        width: 7%;
+      }
+      .explorer-table th:nth-child(9),
+      .explorer-table td:nth-child(9) {
+        width: 7%;
+      }
+      .explorer-table .pair-sub,
+      .explorer-table .cell-sub {
+        word-break: break-word;
+      }
+      .explorer-table .cell-main,
+      .explorer-table .cell-sub {
+        overflow-wrap: anywhere;
+      }
+      .pool-main-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .pool-link-btn {
+        opacity: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(95, 108, 138, 0.16);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text-dim);
+        border-radius: 999px;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        font-size: 12px;
+        line-height: 1;
+        font-family: var(--font-mono);
+        text-decoration: none;
+        transition: opacity 0.12s, border-color 0.12s, color 0.12s, background 0.12s;
+        pointer-events: none;
+      }
+      .explorer-table tr:hover .pool-link-btn,
+      .pool-link-btn:focus-visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .pool-link-btn:hover,
+      .pool-link-btn:focus-visible {
+        color: var(--cyan);
+        border-color: rgba(137, 220, 235, 0.24);
+        background: rgba(137, 220, 235, 0.06);
+        outline: none;
       }
       .pair-main {
         font-size: 13px;
@@ -1184,6 +1299,13 @@
           align-items: flex-start;
           flex-direction: column;
         }
+        .explorer-toolbar {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .explorer-search {
+          width: 100%;
+        }
       }
 
       @media (max-width: 720px) {
@@ -1244,6 +1366,38 @@
           padding: 6px 0;
         }
         .token-pool-table td::before {
+          content: attr(data-label);
+          display: block;
+          margin-bottom: 3px;
+          color: var(--text-dim);
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .explorer-table,
+        .explorer-table thead,
+        .explorer-table tbody,
+        .explorer-table th,
+        .explorer-table td,
+        .explorer-table tr {
+          display: block;
+          width: 100%;
+        }
+        .explorer-table thead {
+          display: none;
+        }
+        .explorer-table tr {
+          border-bottom: 1px solid var(--border);
+          padding: 10px 0;
+        }
+        .explorer-table tr:last-child {
+          border-bottom: none;
+        }
+        .explorer-table td {
+          border-bottom: none;
+          padding: 6px 0;
+        }
+        .explorer-table td::before {
           content: attr(data-label);
           display: block;
           margin-bottom: 3px;
@@ -1356,14 +1510,28 @@
           <div class="section-note">
             Column labels carry the context here. Rows only show pool-specific values so the scan is faster.
           </div>
-          <div class="pool-table-wrap">
-            <table class="pool-table">
+          <div class="explorer-toolbar">
+            <div class="section-note" style="margin: 0">
+              Search by pair, pool ID, token symbol, or feed source.
+            </div>
+            <input
+              id="pool-search"
+              class="explorer-search"
+              type="search"
+              placeholder="Search pools"
+              oninput="setPoolSearch(this.value)"
+            />
+          </div>
+          <div class="pool-table-wrap explorer-table-wrap">
+            <table class="pool-table explorer-table">
               <thead>
                 <tr>
                   <th>Pool</th>
+                  <th>Source</th>
                   <th>AMM Price</th>
                   <th>Bitflow Est. USD</th>
-                  <th>Benchmark</th>
+                  <th>Benchmark Price</th>
+                  <th>Benchmark Source</th>
                   <th>Liquidity</th>
                   <th>30m Price Δ</th>
                   <th>30m Vol Δ</th>
@@ -1516,6 +1684,7 @@
       let selectedPool = null;
       let selectedToken = null;
       let poolSourceFilter = "all";
+      let poolSearchQuery = "";
       let priceChart = null;
       let volChart = null;
       let usdPriceChart = null;
@@ -1630,6 +1799,11 @@
         return n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
       }
 
+      function fmtShare(n) {
+        if (n == null || isNaN(n)) return "—";
+        return `${(n * 100).toFixed(n >= 0.1 ? 1 : 2)}%`;
+      }
+
       function fmtStableUsd(n, minDp = 4, maxDp = 6) {
         if (n == null || isNaN(n)) return "—";
         const fixed = n.toFixed(maxDp);
@@ -1650,6 +1824,22 @@
 
       function getReferenceSource(agg) {
         return agg?.reference_source ?? "coingecko";
+      }
+
+      function getReferenceSourceLabel(agg) {
+        return getReferenceSource(agg) === "fixed-peg" ? "Fixed" : "CoinGecko";
+      }
+
+      function getPoolContractId(poolId) {
+        if (!poolId) return null;
+        return poolId.includes(".") ? poolId : null;
+      }
+
+      function getPoolExplorerUrl(poolId) {
+        const contractId = getPoolContractId(poolId);
+        return contractId
+          ? `https://explorer.hiro.so/txid/${encodeURIComponent(contractId)}`
+          : null;
       }
 
       function getReferenceOnlyLabel(agg) {
@@ -1697,6 +1887,7 @@
             ? 1
             : externalPrices[targetSymbol] ?? null;
           const basePriceUsd = targetUsd != null ? scaledPrice * targetUsd : null;
+          const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetUsd ?? 1);
 
           poolPrices.push({
             pool_id: ticker.pool_id,
@@ -1705,10 +1896,10 @@
             target_symbol: targetSymbol,
             scaled_price: scaledPrice,
             base_price_usd: basePriceUsd,
+            contribution_volume_usd: basePriceUsd != null ? targetVolumeUsd : null,
             resolution: basePriceUsd != null ? "direct" : "failed",
           });
 
-          const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetUsd ?? 1);
           if (basePriceUsd != null) {
             if (!vwapEntries[baseSymbol]) vwapEntries[baseSymbol] = [];
             vwapEntries[baseSymbol].push({
@@ -1742,6 +1933,7 @@
           let basePriceUsd = null;
           let resolution = "failed";
           let targetPriceUsd = null;
+          let targetVolumeUsd = null;
           if (targetSymbol === "sBTC" && sbtcVwap != null) {
             targetPriceUsd = sbtcVwap;
           } else if (targetSymbol === "STX" && stxVwap != null) {
@@ -1750,6 +1942,7 @@
           if (targetPriceUsd != null) {
             basePriceUsd = scaledPrice * targetPriceUsd;
             resolution = "cross-pair";
+            targetVolumeUsd = parseFloat(ticker.target_volume) * targetPriceUsd;
           }
 
           poolPrices.push({
@@ -1759,15 +1952,15 @@
             target_symbol: targetSymbol,
             scaled_price: scaledPrice,
             base_price_usd: basePriceUsd,
+            contribution_volume_usd: targetVolumeUsd,
             resolution,
           });
 
           if (basePriceUsd != null) {
-            const targetVolumeUsd = parseFloat(ticker.target_volume) * (targetPriceUsd ?? 0);
             if (!vwapEntries[baseSymbol]) vwapEntries[baseSymbol] = [];
             vwapEntries[baseSymbol].push({
               price: basePriceUsd,
-              volumeUsd: targetVolumeUsd,
+              volumeUsd: targetVolumeUsd ?? 0,
             });
           }
         }
@@ -2039,6 +2232,11 @@
         else if (currentView === "token" && selectedToken) renderTokenDetail(selectedToken);
       }
 
+      function setPoolSearch(value) {
+        poolSearchQuery = (value ?? "").trim().toLowerCase();
+        if (currentView === "grid") renderPoolTable();
+      }
+
       function renderSourceFilterControl() {
         const container = document.getElementById("source-filter");
         if (!container) return;
@@ -2199,6 +2397,16 @@
         const baseSymbol = pp?.base_symbol ?? tokens.base;
         const agg = getAgg(baseSymbol);
         const r30 = latestBI[pid]?.["30min"];
+        const benchmark = getReferencePrice(agg);
+        const poolTolerance = agg?.tolerance_pct ?? null;
+        const poolDivergencePct =
+          pp?.base_price_usd != null && benchmark != null && benchmark !== 0
+            ? ((pp.base_price_usd - benchmark) / benchmark) * 100
+            : null;
+        const poolIsAlert =
+          poolDivergencePct != null &&
+          poolTolerance != null &&
+          Math.abs(poolDivergencePct) > poolTolerance;
         return {
           pid,
           tokens,
@@ -2209,12 +2417,15 @@
               : "—",
           estimatedUsd: pp?.base_price_usd ?? null,
           baseSymbol,
-          benchmark: getReferencePrice(agg),
+          sourceLabel: sourceDisplayLabel(getPoolSource(pid)),
+          benchmark,
           benchmarkSource: getReferenceSource(agg),
           benchmarkLabel: formatBenchmarkLabel(agg),
           priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
           volumeChangePct: r30?.base_volume?.percent ?? null,
           liquidity,
+          poolDivergencePct,
+          poolIsAlert,
           agg,
         };
       }
@@ -2224,6 +2435,7 @@
         if (!agg) return [];
         const benchmark = getReferencePrice(agg);
         const benchmarkLabel = formatBenchmarkLabel(agg);
+        const totalContributionUsd = agg.total_volume_usd || 0;
 
         return Object.values(latestPoolPrices)
           .map((pp) => {
@@ -2231,6 +2443,11 @@
             const liquidity = s?.liquidity[s.liquidity.length - 1] ?? null;
             const r30 = latestBI[pp.pool_id]?.["30min"];
             const tokens = pairTokens(pp.ticker_id);
+            const contributionVolumeUsd = pp.contribution_volume_usd ?? null;
+            const contributionShare =
+              contributionVolumeUsd != null && totalContributionUsd > 0
+                ? contributionVolumeUsd / totalContributionUsd
+                : null;
             const ammLabel =
               pp.scaled_price != null
                 ? `1 ${pp.base_symbol} = ${fmtPrice(pp.scaled_price)} ${pp.target_symbol}`
@@ -2257,6 +2474,8 @@
                 benchmark,
                 benchmarkLabel,
                 liquidity,
+                contributionVolumeUsd,
+                contributionShare,
                 priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
               };
             }
@@ -2280,6 +2499,8 @@
                 benchmark,
                 benchmarkLabel,
                 liquidity,
+                contributionVolumeUsd,
+                contributionShare,
                 priceChangePct: r30?.base_price_usd?.percent ?? r30?.last_price?.percent ?? null,
               };
             }
@@ -2290,9 +2511,8 @@
           .filter((row) => row.tokenUsd != null && row.tokenUsd > 0)
           .filter((row) => poolMatchesSource(row.pool_id))
           .sort((a, b) => {
-            const rank = { Direct: 0, "Cross-pair": 1, Derived: 2 };
             return (
-              (rank[a.contributionType] ?? 9) - (rank[b.contributionType] ?? 9) ||
+              (b.contributionShare ?? -1) - (a.contributionShare ?? -1) ||
               (b.liquidity ?? 0) - (a.liquidity ?? 0)
             );
           });
@@ -2780,55 +3000,88 @@
 
       function renderPoolTable() {
         const body = document.getElementById("pool-table-body");
+        const searchEl = document.getElementById("pool-search");
+        if (searchEl && searchEl.value !== poolSearchQuery) {
+          searchEl.value = poolSearchQuery;
+        }
         const rows = getVisiblePoolIds()
           .map((pid) => getPoolOverview(pid))
           .filter((pool) => pool)
+          .filter((pool) => {
+            if (!poolSearchQuery) return true;
+            const haystack = [
+              pool.pid,
+              pool.tokens.base,
+              pool.tokens.target,
+              pool.baseSymbol,
+              pool.sourceLabel,
+            ]
+              .join(" ")
+              .toLowerCase();
+            return haystack.includes(poolSearchQuery);
+          })
           .sort((a, b) => {
-            const aAlert = a.agg?.is_divergent ? 1 : 0;
-            const bAlert = b.agg?.is_divergent ? 1 : 0;
-            return (
-              bAlert - aAlert ||
-              Math.abs(b.priceChangePct ?? 0) - Math.abs(a.priceChangePct ?? 0) ||
-              (b.liquidity ?? 0) - (a.liquidity ?? 0)
-            );
+            const aAlert = a.poolIsAlert ? 1 : 0;
+            const bAlert = b.poolIsAlert ? 1 : 0;
+            return bAlert - aAlert || (b.liquidity ?? 0) - (a.liquidity ?? 0);
           });
 
         if (!rows.length) {
           body.innerHTML =
-            '<tr><td colspan="7" style="color:var(--text-dim)">No pool data available.</td></tr>';
+            `<tr><td colspan="9" style="color:var(--text-dim)">${
+              poolSearchQuery ? "No pools match the current search." : "No pool data available."
+            }</td></tr>`;
           return;
         }
 
         body.innerHTML = rows
           .map((pool) => {
-            const benchmarkText =
-              pool.benchmark != null ? formatBenchmarkLabel(pool.agg) : "—";
-            const usdClass = pool.agg?.is_divergent ? "alert" : "emphasis";
+            const benchmarkPrice =
+              pool.benchmark != null ? `$${fmtPrice(pool.benchmark)}` : "—";
+            const benchmarkSource = pool.benchmark != null ? getReferenceSourceLabel(pool.agg) : "—";
+            const usdClass = pool.poolIsAlert ? "alert" : "emphasis";
+            const contractId = getPoolContractId(pool.pid);
+            const explorerUrl = getPoolExplorerUrl(pool.pid);
+            const hoverLabel = contractId
+              ? `Contract ID: ${contractId}`
+              : `Pool ref: ${pool.pid}`;
             return `<tr class="clickable" onclick="showDetail('${pool.pid}')">
-  <td>
-    <div class="pair-main">${pool.tokens.base}/${pool.tokens.target}</div>
-    <div class="pair-sub">${pool.pid} · ${pool.sourceLabel}</div>
+  <td data-label="Pool">
+    <div class="pool-main-row" title="${hoverLabel}">
+      <div class="pair-main">${pool.tokens.base}/${pool.tokens.target}</div>
+      ${
+        explorerUrl
+          ? `<a class="pool-link-btn" href="${explorerUrl}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()" title="Open in Hiro Explorer">↗</a>`
+          : ""
+      }
+    </div>
   </td>
-  <td>
+  <td data-label="Source">
+    <div class="cell-main">${pool.sourceLabel}</div>
+  </td>
+  <td data-label="AMM Price">
     <div class="cell-main">${pool.ammLabel}</div>
   </td>
-  <td>
+  <td data-label="Bitflow Est. USD">
     <div class="cell-main ${usdClass}">${
               pool.estimatedUsd != null
                 ? `$${fmtTokenUsd(pool.baseSymbol, pool.estimatedUsd)}`
                 : "—"
             }</div>
   </td>
-  <td>
-    <div class="cell-main">${benchmarkText}</div>
+  <td data-label="Benchmark Price">
+    <div class="cell-main">${benchmarkPrice}</div>
   </td>
-  <td>
+  <td data-label="Benchmark Source">
+    <div class="cell-main">${benchmarkSource}</div>
+  </td>
+  <td data-label="Liquidity">
     <div class="cell-main">$${fmtNum(pool.liquidity ?? 0)}</div>
   </td>
-  <td><span class="${vcClass(pool.priceChangePct)}">${formatPct(
+  <td data-label="30m Price Δ"><span class="${vcClass(pool.priceChangePct)}">${formatPct(
               pool.priceChangePct
             )}</span></td>
-  <td><span class="${vcClass(pool.volumeChangePct)}">${formatPct(
+  <td data-label="30m Vol Δ"><span class="${vcClass(pool.volumeChangePct)}">${formatPct(
               pool.volumeChangePct
             )}</span></td>
 </tr>`;
@@ -2945,7 +3198,7 @@ ${makeMetricTile(
           poolNoteEl.textContent = contributorRows.length
             ? `${contributorRows.length} contributing pool${
                 contributorRows.length === 1 ? "" : "s"
-              } currently feed the ${symbol} estimate in this view. Click any card for pool detail.${filterNote}`
+              } currently feed the ${symbol} estimate in this view, ranked by current VWAP weight. Click any row for pool detail.${filterNote}`
             : `No contributing pools are currently visible for ${symbol} in the tracked Bitflow feed.${filterNote}`;
         }
         if (poolBodyEl) {
@@ -2958,6 +3211,11 @@ ${makeMetricTile(
     <div class="token-pool-meta">
       <span class="contrib-chip ${row.contributionTone}">${row.contributionType}</span>
       <span class="monitor-chip neutral">${row.sourceLabel}</span>
+      ${
+        row.contributionShare != null
+          ? `<span class="monitor-chip neutral">${fmtShare(row.contributionShare)} wt</span>`
+          : ""
+      }
     </div>
     <div class="pair-sub">${row.note} · ${row.pool_id}</div>
   </td>

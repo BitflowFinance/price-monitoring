@@ -80,7 +80,6 @@ async function runJob(): Promise<void> {
 }
 
 // Run immediately on startup, then every minute.
-// This is intentionally short-term to collect denser history.
 console.log("[cron] Ticker analytics starting...");
 runJob();
 
