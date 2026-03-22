@@ -455,7 +455,7 @@ All dashboard timestamps are displayed in UTC.
 The home view is organized into six sections:
 
 - **Health Snapshot** — top-level status cards for active alerts, last update time, and tracked pool count / feed coverage.
-- **Peg Monitor** — primary cards for `aeUSDC`, `USDCx`, and `USDh`, showing Bitflow-estimated USD, `$1.00` benchmark, tolerance, and alert state.
+- **Stablecoins** — primary cards for `aeUSDC`, `USDCx`, and `USDh`, showing Bitflow-estimated USD, `$1.00` benchmark, tolerance, and alert state.
 - **Market Tokens** — separate cards for `STX` and `sBTC`, showing Bitflow-estimated USD versus CoinGecko benchmark prices.
 - **Pool Views filter** — scopes Top Pool Movers, Pool Explorer, and token contributing-pool tables to `All pools`, `HODLMM only`, or `Classic only`. Token cards remain combined across all active feeds.
 - **Alerts & Notes / Top Pool Movers** — a conclusion-oriented summary instead of forcing the reader to infer status from raw cards alone.
@@ -477,10 +477,11 @@ Token cards emphasize **Bitflow Est. USD** and **Benchmark** because a token can
 
 Each row in the **Pool Explorer** shows:
 
-- Pool pair and pool ID
+- Pool pair
+- Pool source (`Classic` or `HODLMM`)
 - Raw **AMM Pair Price**
 - **Bitflow Est. USD** for the base token
-- Token-level **Benchmark**
+- **Benchmark Price** and **Benchmark Source**
 - Latest liquidity
 - 30-minute price and volume change
 
@@ -500,7 +501,7 @@ Click any row to drill into the detail view.
 
 ### Token detail view
 
-Opened by clicking a token monitor card. Shows:
+Opened by clicking a token card. Shows:
 
 - Summary strip with Bitflow Est. USD, Benchmark, and Deviation
 - Internal price history over time
