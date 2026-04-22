@@ -1,18 +1,18 @@
 import { Ticker } from "./types.js";
 import { getDecimalsForCurrency, unscaleBinPrice } from "./utils.js";
 
-const TICKER_SOURCES = [
-  {
-    name: "classic" as const,
-    url: "https://api.bitflowapis.finance/ticker",
-    priceEncoding: "actual" as const,
-  },
-  {
-    name: "hodlmm" as const,
-    url: "https://bff.bitflowapis.finance/api/app/v1/tickers",
-    priceEncoding: "scaled" as const,
-  },
-];
+// Provisional combined endpoint — replaces the previous pair of
+// `/ticker` (classic) + `/api/app/v1/tickers` (HODLMM) feeds. URL is
+// expected to change when the endpoint is promoted out of test.
+const TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
+
+// The combined feed mixes two price encodings in a single payload: DLMM /
+// HODLMM rows publish scaled (raw micro-unit) prices, while classic
+// (xyk / stableswap) rows publish actual human-readable prices. Downstream
+// code assumes scaled input, so classic rows are converted at ingest.
+function priceEncodingForPool(poolId: string): "scaled" | "actual" {
+  return poolId.startsWith("dlmm_") ? "scaled" : "actual";
+}
 
 function normalizeCurrency(currency: unknown): string {
   if (currency == null) return "";
@@ -41,13 +41,11 @@ function normalizePriceField(
   return String(unscaleBinPrice(numeric, decimalsX, decimalsY));
 }
 
-function normalizeTicker(
-  raw: Record<string, unknown>,
-  source: "classic" | "hodlmm",
-  encoding: "actual" | "scaled"
-): Ticker {
+function normalizeTicker(raw: Record<string, unknown>): Ticker {
   const baseCurrency = normalizeCurrency(raw.base_currency);
   const targetCurrency = normalizeCurrency(raw.target_currency);
+  const poolId = String(raw.pool_id ?? "");
+  const encoding = priceEncodingForPool(poolId);
 
   return {
     ticker_id: normalizeTickerId(raw.ticker_id, baseCurrency, targetCurrency),
@@ -56,22 +54,17 @@ function normalizeTicker(
     last_price: normalizePriceField(raw.last_price, baseCurrency, targetCurrency, encoding),
     base_volume: String(raw.base_volume ?? 0),
     target_volume: String(raw.target_volume ?? 0),
-    pool_id: String(raw.pool_id ?? ""),
+    pool_id: poolId,
     liquidity_in_usd: String(raw.liquidity_in_usd ?? 0),
     bid: normalizePriceField(raw.bid, baseCurrency, targetCurrency, encoding),
     ask: normalizePriceField(raw.ask, baseCurrency, targetCurrency, encoding),
     high: normalizePriceField(raw.high, baseCurrency, targetCurrency, encoding),
     low: normalizePriceField(raw.low, baseCurrency, targetCurrency, encoding),
-    source,
   };
 }
 
-async function fetchSource(
-  url: string,
-  source: "classic" | "hodlmm",
-  encoding: "actual" | "scaled"
-): Promise<Ticker[]> {
-  const response = await fetch(url, {
+export async function fetchTickers(): Promise<Ticker[]> {
+  const response = await fetch(TICKER_URL, {
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
   });
@@ -86,36 +79,10 @@ async function fetchSource(
     throw new Error(`Unexpected response shape: expected array`);
   }
 
-  return data.map((item) => normalizeTicker(item as Record<string, unknown>, source, encoding));
-}
-
-export async function fetchTickers(): Promise<Ticker[]> {
-  const results = await Promise.allSettled(
-    TICKER_SOURCES.map((source) => fetchSource(source.url, source.name, source.priceEncoding))
-  );
-
   const merged = new Map<string, Ticker>();
-  const failures: string[] = [];
-
-  results.forEach((result, idx) => {
-    const source = TICKER_SOURCES[idx];
-    if (result.status === "rejected") {
-      failures.push(`${source.name}: ${result.reason}`);
-      return;
-    }
-    for (const ticker of result.value) {
-      // Later sources win on collision. This prefers HODLMM over classic if the
-      // production feed ever starts duplicating pool IDs across endpoints.
-      merged.set(ticker.pool_id, ticker);
-    }
-  });
-
-  if (merged.size === 0) {
-    throw new Error(`All ticker sources failed. ${failures.join(" | ")}`);
-  }
-
-  if (failures.length > 0) {
-    console.warn(`[fetcher] Partial source failure: ${failures.join(" | ")}`);
+  for (const item of data) {
+    const ticker = normalizeTicker(item as Record<string, unknown>);
+    merged.set(ticker.pool_id, ticker);
   }
 
   return Array.from(merged.values());

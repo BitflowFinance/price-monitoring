@@ -86,16 +86,17 @@ sBTC's VWAP is established first from direct-resolution pools, then used as a br
 
 > Tracked stablecoins (`aeUSDC`, `USDCx`, `USDh`) are benchmarked against a fixed `$1.00` peg. Direct pool USD conversion through those quote assets also assumes the peg, which avoids circularly reusing CoinGecko prices that may themselves come from Bitflow.
 
-### Coverage caveat
+### Coverage
 
-This repo currently merges two Bitflow pool feeds on its own:
+Ticker data is fetched from a single combined Bitflow feed:
 
 ```
-https://api.bitflowapis.finance/ticker
-https://bff.bitflowapis.finance/api/app/v1/tickers
+https://api.bitflowapis.finance/tickerTest
 ```
 
-The first is the live classic-pools feed. The second is the newer HODLMM / DLMM feed. The dashboard combines both by default and lets you scope the pool-oriented views to `Classic only`, `HODLMM only`, or `All pools`.
+This feed covers both classic pools and the HODLMM / DLMM pools. The dashboard still lets you scope the pool-oriented views to `Classic only`, `HODLMM only`, or `All pools`; the source is inferred from the `pool_id` prefix (e.g. `dlmm_*` → HODLMM).
+
+> The `/tickerTest` path is provisional and is expected to be promoted to a stable URL; update `TICKER_URL` in `src/fetcher.ts` when that happens.
 
 ---
 
@@ -127,15 +128,14 @@ Timeline (each mark = one 1min snapshot)
 ## Data flow
 
 ```
-  ┌──────────────────────────────┐    ┌───────────────────────────────┐
-  │   Bitflow Classic API        │    │   Bitflow HODLMM API          │
-  │   /ticker                    │    │   /api/app/v1/tickers         │
-  └──────────────┬───────────────┘    └───────────────┬───────────────┘
-                 │  GET (15s timeout)                  │  GET (15s timeout)
-                 └───────────────┬─────────────────────┘
-                                 ▼
-                          [ fetcher.ts ]
-                          normalize + merge
+                  ┌──────────────────────────────────────┐
+                  │   Bitflow Combined Ticker API        │
+                  │   /tickerTest  (classic + HODLMM)    │
+                  └──────────────────┬───────────────────┘
+                                     │  GET (15s timeout)
+                                     ▼
+                              [ fetcher.ts ]
+                              normalize
                                  │
       Ticker[]                   │                   Record<symbol,USD>
                                  │                           ▲

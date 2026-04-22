@@ -1440,8 +1440,8 @@
         <div class="header-eyebrow">Bitflow Analytics</div>
         <h1>Bitflow Price Monitoring</h1>
         <div class="header-copy">
-          Combined classic and HODLMM pool coverage for peg checks, market-reference tracking,
-          and pool-level drilldowns across the Bitflow ticker feeds.
+          Combined pool coverage for peg checks, market-reference tracking,
+          and pool-level drilldowns across the Bitflow ticker feed.
         </div>
       </div>
       <div class="header-right">
@@ -2183,12 +2183,12 @@
         const familyLabel = labels.length ? labels.join(" + ") : "none";
         const note =
           labels.length === 2
-            ? "Current dashboard coverage combines the classic pools endpoint with the HODLMM / DLMM endpoint."
+            ? "Dashboard coverage spans classic pools and HODLMM / DLMM pools from the combined Bitflow ticker feed."
             : labels[0] === "HODLMM"
-            ? "Current dashboard coverage is limited to the HODLMM / DLMM endpoint."
+            ? "Dashboard coverage currently shows HODLMM / DLMM pools from the combined Bitflow ticker feed."
             : labels[0] === "Classic"
-            ? "Current dashboard coverage is limited to the classic pools endpoint."
-            : "Dashboard coverage matches the currently configured ticker sources.";
+            ? "Dashboard coverage currently shows classic pools from the combined Bitflow ticker feed."
+            : "Dashboard coverage reflects the current Bitflow ticker feed.";
         return {
           label: familyLabel,
           note,
