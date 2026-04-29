@@ -6,16 +6,41 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const SNAPSHOTS_FILE = path.join(DATA_DIR, "snapshots.json");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 
+/**
+ * Write JSON atomically: temp file in the same directory, then rename.
+ * Avoids snapshots/reports ending up half-written if the process dies mid-write.
+ */
+function writeJsonAtomic(filePath: string, data: unknown): void {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const tmp = path.join(
+    dir,
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`
+  );
+  try {
+    fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, "utf-8");
+    fs.renameSync(tmp, filePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
+}
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   if (!fs.existsSync(SNAPSHOTS_FILE)) {
-    fs.writeFileSync(SNAPSHOTS_FILE, "[]\n", "utf-8");
+    writeJsonAtomic(SNAPSHOTS_FILE, []);
   }
   if (!fs.existsSync(REPORTS_FILE)) {
-    fs.writeFileSync(REPORTS_FILE, "[]\n", "utf-8");
+    writeJsonAtomic(REPORTS_FILE, []);
   }
 }
 
@@ -43,7 +68,7 @@ export function saveSnapshot(tickers: Ticker[]): Snapshot {
 
   snapshots.push(newSnapshot);
 
-  fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(snapshots, null, 2), "utf-8");
+  writeJsonAtomic(SNAPSHOTS_FILE, snapshots);
   console.log(
     `[storage] Saved snapshot at ${newSnapshot.timestamp}. Total kept: ${snapshots.length}`
   );
@@ -92,5 +117,5 @@ export function saveReport(report: IntervalReport, runAt: string): void {
 
   reports.push({ ...report, run_at: runAt });
 
-  fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports, null, 2), "utf-8");
+  writeJsonAtomic(REPORTS_FILE, reports);
 }
