@@ -79,10 +79,38 @@ async function runJob(): Promise<void> {
   saveSnapshot(tickers);
 }
 
+/**
+ * If a tick fires while runJob() is still in flight, two workers would read/write
+ * the same JSON files and can lose updates or corrupt storage. Serialize runs and
+ * do at most one catch-up run if we stacked ticks while busy.
+ */
+let jobInFlight = false;
+let runAgainAfterCurrent = false;
+
+async function runJobSerialized(): Promise<void> {
+  if (jobInFlight) {
+    runAgainAfterCurrent = true;
+    return;
+  }
+  jobInFlight = true;
+  try {
+    do {
+      runAgainAfterCurrent = false;
+      try {
+        await runJob();
+      } catch (err) {
+        console.error("[cron] Unhandled error in job:", err);
+      }
+    } while (runAgainAfterCurrent);
+  } finally {
+    jobInFlight = false;
+  }
+}
+
 // Run immediately on startup, then every minute.
 console.log("[cron] Ticker analytics starting...");
-runJob();
+runJobSerialized();
 
 cron.schedule("* * * * *", () => {
-  runJob().catch((err) => console.error("[cron] Unhandled error in job:", err));
+  void runJobSerialized();
 });
