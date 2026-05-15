@@ -5,13 +5,29 @@ import { getDecimalsForCurrency, unscaleBinPrice } from "./utils.js";
 // `/ticker` (classic) + `/api/app/v1/tickers` (HODLMM) feeds. URL is
 // expected to change when the endpoint is promoted out of test.
 const TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
+const HODLMM_FALLBACK_URL = "https://bff.bitflowapis.finance/api/app/v1/tickers";
 
-// The combined feed mixes two price encodings in a single payload: DLMM /
-// HODLMM rows publish scaled (raw micro-unit) prices, while classic
-// (xyk / stableswap) rows publish actual human-readable prices. Downstream
-// code assumes scaled input, so classic rows are converted at ingest.
-function priceEncodingForPool(poolId: string): "scaled" | "actual" {
-  return poolId.startsWith("dlmm_") ? "scaled" : "actual";
+// HODLMM pools are owned by a dedicated deployer. Classic pools can come from
+// several deployers, so a non-HODLMM deployer is treated as classic.
+const HODLMM_DEPLOYERS = new Set([
+  "SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD",
+]);
+
+export function sourceForPool(poolId: string): "hodlmm" | "classic" {
+  // Legacy HODLMM snapshots used synthetic IDs like `dlmm_3`.
+  if (poolId.startsWith("dlmm_")) return "hodlmm";
+  const [deployer, contractName = ""] = poolId.split(".");
+  if (HODLMM_DEPLOYERS.has(deployer) || contractName.startsWith("dlmm-pool-")) {
+    return "hodlmm";
+  }
+  return "classic";
+}
+
+// Live ticker APIs currently publish human-readable prices for both classic and
+// HODLMM rows. Downstream code stores scaled prices, so live rows are converted
+// at ingest regardless of pool family.
+function priceEncodingForPool(_poolId: string): "actual" {
+  return "actual";
 }
 
 function normalizeCurrency(currency: unknown): string {
@@ -60,11 +76,12 @@ function normalizeTicker(raw: Record<string, unknown>): Ticker {
     ask: normalizePriceField(raw.ask, baseCurrency, targetCurrency, encoding),
     high: normalizePriceField(raw.high, baseCurrency, targetCurrency, encoding),
     low: normalizePriceField(raw.low, baseCurrency, targetCurrency, encoding),
+    source: sourceForPool(poolId),
   };
 }
 
-export async function fetchTickers(): Promise<Ticker[]> {
-  const response = await fetch(TICKER_URL, {
+async function fetchSource(url: string): Promise<Ticker[]> {
+  const response = await fetch(url, {
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
   });
@@ -79,10 +96,34 @@ export async function fetchTickers(): Promise<Ticker[]> {
     throw new Error(`Unexpected response shape: expected array`);
   }
 
-  const merged = new Map<string, Ticker>();
-  for (const item of data) {
-    const ticker = normalizeTicker(item as Record<string, unknown>);
+  return data.map((item) => normalizeTicker(item as Record<string, unknown>));
+}
+
+function mergeTickers(merged: Map<string, Ticker>, tickers: Ticker[], source?: "hodlmm" | "classic"): number {
+  let added = 0;
+  for (const ticker of tickers) {
+    if (!ticker.pool_id || (source && ticker.source !== source)) continue;
+    if (!merged.has(ticker.pool_id)) added++;
     merged.set(ticker.pool_id, ticker);
+  }
+  return added;
+}
+
+export async function fetchTickers(): Promise<Ticker[]> {
+  const merged = new Map<string, Ticker>();
+  mergeTickers(merged, await fetchSource(TICKER_URL));
+
+  if (!Array.from(merged.values()).some((ticker) => ticker.source === "hodlmm")) {
+    try {
+      const added = mergeTickers(merged, await fetchSource(HODLMM_FALLBACK_URL), "hodlmm");
+      if (added > 0) {
+        console.warn(
+          `[fetcher] ${TICKER_URL} returned no HODLMM rows; added ${added} rows from the legacy HODLMM fallback.`
+        );
+      }
+    } catch (err) {
+      console.warn(`[fetcher] HODLMM fallback failed: ${err}`);
+    }
   }
 
   return Array.from(merged.values());

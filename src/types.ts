@@ -11,6 +11,7 @@ export interface Ticker {
   ask: string;
   high: string;
   low: string;
+  source?: "hodlmm" | "classic";
 }
 
 export interface Snapshot {

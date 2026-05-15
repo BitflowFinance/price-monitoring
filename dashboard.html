@@ -1696,6 +1696,7 @@
       let selectedToken = null;
       let poolSourceFilter = "all";
       let poolSearchQuery = "";
+      let liveHodlmmFallbackActive = false;
       let poolContractCache = {};
       let poolContractPending = new Set();
       let priceChart = null;
@@ -1726,7 +1727,11 @@
       };
       const TRACKED_SYMBOLS = ["STX", "sBTC", "aeUSDC", "USDCx", "USDh"];
       const STABLE_SYMBOLS = ["aeUSDC", "USDCx", "USDh"];
+      // HODLMM pools are owned by a dedicated deployer. Classic pools can come
+      // from several deployers, so a non-HODLMM deployer is treated as classic.
+      const HODLMM_DEPLOYERS = new Set(["SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD"]);
       const LIVE_TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
+      const LIVE_HODLMM_FALLBACK_URL = "https://bff.bitflowapis.finance/api/app/v1/tickers";
       const LIVE_COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
       const LIVE_COINGECKO_IDS = {
         STX: "blockstack",
@@ -1788,8 +1793,19 @@
         );
       }
 
+      function sourceForPool(poolId) {
+        const value = String(poolId ?? "");
+        // Legacy HODLMM snapshots used synthetic IDs like `dlmm_3`.
+        if (value.startsWith("dlmm_")) return "hodlmm";
+        const [deployer, contractName = ""] = value.split(".");
+        if (HODLMM_DEPLOYERS.has(deployer) || contractName.startsWith("dlmm-pool-")) {
+          return "hodlmm";
+        }
+        return "classic";
+      }
+
       function priceEncodingForPool(poolId) {
-        return String(poolId ?? "").startsWith("dlmm_") ? "scaled" : "actual";
+        return "actual";
       }
 
       function normalizeCurrency(currency) {
@@ -1838,7 +1854,7 @@
           ask: normalizePriceField(raw.ask, baseCurrency, targetCurrency, encoding),
           high: normalizePriceField(raw.high, baseCurrency, targetCurrency, encoding),
           low: normalizePriceField(raw.low, baseCurrency, targetCurrency, encoding),
-          source: poolId.startsWith("dlmm_") ? "hodlmm" : "classic",
+          source: sourceForPool(poolId),
         };
       }
 
@@ -2246,19 +2262,23 @@
         const sources = Array.from(
           new Set(
             allPools
-              .map((pid) => poolTS[pid]?.source ?? (pid.startsWith("dlmm_") ? "hodlmm" : "classic"))
+              .map((pid) => poolTS[pid]?.source ?? sourceForPool(pid))
               .filter(Boolean)
           )
         );
         const labels = sources.map((source) => sourceDisplayLabel(source));
         const familyLabel = labels.length ? labels.join(" + ") : "none";
+        const hasClassic = sources.includes("classic");
+        const hasHodlmm = sources.includes("hodlmm");
         const note =
-          labels.length === 2
+          hasClassic && hasHodlmm && liveHodlmmFallbackActive
+            ? "Dashboard coverage spans classic pools from tickerTest plus HODLMM / DLMM pools from the legacy fallback because the combined feed has no HODLMM rows right now."
+            : hasClassic && hasHodlmm
             ? "Dashboard coverage spans classic pools and HODLMM / DLMM pools from the combined Bitflow ticker feed."
-            : labels[0] === "HODLMM"
+            : hasHodlmm
             ? "Dashboard coverage currently shows HODLMM / DLMM pools from the combined Bitflow ticker feed."
-            : labels[0] === "Classic"
-            ? "Dashboard coverage currently shows classic pools from the combined Bitflow ticker feed."
+            : hasClassic
+            ? "Dashboard coverage currently shows classic pools only; the combined Bitflow ticker feed has no HODLMM / DLMM rows from the expected deployer."
             : "Dashboard coverage reflects the current Bitflow ticker feed.";
         return {
           label: familyLabel,
@@ -2290,7 +2310,7 @@
       }
 
       function getPoolSource(poolId) {
-        return poolTS[poolId]?.source ?? (poolId.startsWith("dlmm_") ? "hodlmm" : "classic");
+        return poolTS[poolId]?.source ?? sourceForPool(poolId);
       }
 
       function poolMatchesSource(poolId, source = poolSourceFilter) {
@@ -2730,22 +2750,55 @@
         return prices;
       }
 
-      async function fetchLiveSnapshotAndReport() {
-        const [tickerRes, externalPrices] = await Promise.all([
-          fetch(LIVE_TICKER_URL, { headers: { Accept: "application/json" } }),
-          fetchLiveExternalPrices(),
-        ]);
-        if (!tickerRes.ok) {
-          throw new Error(`Failed to load live ticker feed: ${tickerRes.status} ${tickerRes.statusText}`);
+      async function fetchLiveTickerRows(url) {
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) {
+          throw new Error(`Failed to load live ticker feed: ${res.status} ${res.statusText}`);
         }
-        const rawTickers = await tickerRes.json();
+        const rawTickers = await res.json();
         if (!Array.isArray(rawTickers)) {
           throw new Error("Unexpected live ticker response shape");
         }
+        return rawTickers.map((raw) => normalizeTicker(raw));
+      }
+
+      function mergeLiveTickers(tickersByPool, tickers, source) {
+        let added = 0;
+        for (const ticker of tickers) {
+          if (!ticker.pool_id || (source && ticker.source !== source)) continue;
+          if (!tickersByPool.has(ticker.pool_id)) added += 1;
+          tickersByPool.set(ticker.pool_id, ticker);
+        }
+        return added;
+      }
+
+      async function fetchLiveSnapshotAndReport() {
+        liveHodlmmFallbackActive = false;
+        const [liveTickers, externalPrices] = await Promise.all([
+          fetchLiveTickerRows(LIVE_TICKER_URL),
+          fetchLiveExternalPrices(),
+        ]);
         const tickersByPool = new Map();
-        for (const raw of rawTickers) {
-          const ticker = normalizeTicker(raw);
-          if (ticker.pool_id) tickersByPool.set(ticker.pool_id, ticker);
+        mergeLiveTickers(tickersByPool, liveTickers);
+        const hasHodlmm = Array.from(tickersByPool.values()).some(
+          (ticker) => ticker.source === "hodlmm"
+        );
+        if (!hasHodlmm) {
+          try {
+            const added = mergeLiveTickers(
+              tickersByPool,
+              await fetchLiveTickerRows(LIVE_HODLMM_FALLBACK_URL),
+              "hodlmm"
+            );
+            if (added > 0) {
+              liveHodlmmFallbackActive = true;
+              console.warn(
+                `tickerTest returned no HODLMM rows; added ${added} rows from the legacy HODLMM fallback.`
+              );
+            }
+          } catch (err) {
+            console.warn("HODLMM fallback unavailable:", err);
+          }
         }
         const timestamp = new Date().toISOString();
         const tickers = Array.from(tickersByPool.values());
@@ -2823,7 +2876,7 @@
                 baseVols: [],
                 targetVols: [],
                 liquidity: [],
-                source: t.source ?? (pool_id.startsWith("dlmm_") ? "hodlmm" : "classic"),
+                source: t.source ?? sourceForPool(pool_id),
               };
             }
             const s = poolTS[pool_id];

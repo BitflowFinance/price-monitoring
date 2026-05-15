@@ -94,7 +94,7 @@ Ticker data is fetched from a single combined Bitflow feed:
 https://api.bitflowapis.finance/tickerTest
 ```
 
-This feed covers both classic pools and the HODLMM / DLMM pools. The dashboard still lets you scope the pool-oriented views to `Classic only`, `HODLMM only`, or `All pools`; the source is inferred from the `pool_id` prefix (e.g. `dlmm_*` → HODLMM).
+This feed is intended to cover both classic pools and HODLMM / DLMM pools. During the provisional `/tickerTest` period, the app falls back to the legacy HODLMM ticker feed only if the combined feed returns no HODLMM rows. The dashboard still lets you scope the pool-oriented views to `Classic only`, `HODLMM only`, or `All pools`; the source is inferred from legacy `dlmm_*` IDs, `dlmm-pool-*` contract names, and the known HODLMM deployer (`SM1FKX...`). Classic pools can be deployed by several wallets.
 
 > The `/tickerTest` path is provisional and is expected to be promoted to a stable URL; update `TICKER_URL` in `src/fetcher.ts` when that happens.
 
