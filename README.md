@@ -453,6 +453,12 @@ All dashboard timestamps are displayed in UTC.
 
 ### Public deployment
 
+Live dashboard:
+
+```
+https://bitflow-price-monitoring.vercel.app/dashboard
+```
+
 The dashboard can also run as a static Vercel deployment. Local JSON files under
 `data/` are intentionally excluded from Vercel uploads; when those files are not
 present, the browser fetches the live Bitflow `/ticker` feed and CoinGecko
