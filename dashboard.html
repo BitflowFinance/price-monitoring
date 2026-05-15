@@ -2139,7 +2139,7 @@
 
           const warnings = [];
           if (resolution === "implied") {
-            warnings.push("Price implied from DEX pairs, not direct trading");
+            warnings.push("USD price inferred from DEX route");
           }
           if (resolution === "unavailable") {
             warnings.push(
@@ -2672,7 +2672,7 @@
         if (!text) return "";
         return text.replace(
           "Price implied from DEX pairs, not direct trading",
-          "Price derived from DEX pairs, not direct trading"
+          "USD price inferred from DEX route"
         );
       }
 

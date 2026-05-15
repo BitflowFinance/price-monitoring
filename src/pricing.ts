@@ -188,7 +188,7 @@ export function computePricing(
     // Collect warnings
     const warnings: string[] = [];
     if (resolution === 'implied') {
-      warnings.push('Price implied from DEX pairs, not direct trading');
+      warnings.push("USD price inferred from DEX route");
     }
     if (resolution === 'unavailable') {
       warnings.push('No DEX trading data — needs active trading volume on pairs involving this token');
