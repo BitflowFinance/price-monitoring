@@ -1,11 +1,8 @@
 import { Ticker } from "./types.js";
 import { getDecimalsForCurrency, unscaleBinPrice } from "./utils.js";
 
-// Provisional combined endpoint — replaces the previous pair of
-// `/ticker` (classic) + `/api/app/v1/tickers` (HODLMM) feeds. URL is
-// expected to change when the endpoint is promoted out of test.
-const TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
-const HODLMM_FALLBACK_URL = "https://bff.bitflowapis.finance/api/app/v1/tickers";
+// Unified Bitflow ticker endpoint for classic and HODLMM pools.
+const TICKER_URL = "https://api.bitflowapis.finance/ticker";
 
 // HODLMM pools are owned by a dedicated deployer. Classic pools can come from
 // several deployers, so a non-HODLMM deployer is treated as classic.
@@ -99,32 +96,10 @@ async function fetchSource(url: string): Promise<Ticker[]> {
   return data.map((item) => normalizeTicker(item as Record<string, unknown>));
 }
 
-function mergeTickers(merged: Map<string, Ticker>, tickers: Ticker[], source?: "hodlmm" | "classic"): number {
-  let added = 0;
-  for (const ticker of tickers) {
-    if (!ticker.pool_id || (source && ticker.source !== source)) continue;
-    if (!merged.has(ticker.pool_id)) added++;
-    merged.set(ticker.pool_id, ticker);
-  }
-  return added;
-}
-
 export async function fetchTickers(): Promise<Ticker[]> {
   const merged = new Map<string, Ticker>();
-  mergeTickers(merged, await fetchSource(TICKER_URL));
-
-  if (!Array.from(merged.values()).some((ticker) => ticker.source === "hodlmm")) {
-    try {
-      const added = mergeTickers(merged, await fetchSource(HODLMM_FALLBACK_URL), "hodlmm");
-      if (added > 0) {
-        console.warn(
-          `[fetcher] ${TICKER_URL} returned no HODLMM rows; added ${added} rows from the legacy HODLMM fallback.`
-        );
-      }
-    } catch (err) {
-      console.warn(`[fetcher] HODLMM fallback failed: ${err}`);
-    }
+  for (const ticker of await fetchSource(TICKER_URL)) {
+    if (ticker.pool_id) merged.set(ticker.pool_id, ticker);
   }
-
   return Array.from(merged.values());
 }

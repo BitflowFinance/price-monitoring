@@ -1696,7 +1696,6 @@
       let selectedToken = null;
       let poolSourceFilter = "all";
       let poolSearchQuery = "";
-      let liveHodlmmFallbackActive = false;
       let poolContractCache = {};
       let poolContractPending = new Set();
       let priceChart = null;
@@ -1730,8 +1729,7 @@
       // HODLMM pools are owned by a dedicated deployer. Classic pools can come
       // from several deployers, so a non-HODLMM deployer is treated as classic.
       const HODLMM_DEPLOYERS = new Set(["SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD"]);
-      const LIVE_TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
-      const LIVE_HODLMM_FALLBACK_URL = "https://bff.bitflowapis.finance/api/app/v1/tickers";
+      const LIVE_TICKER_URL = "https://api.bitflowapis.finance/ticker";
       const LIVE_COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
       const LIVE_COINGECKO_IDS = {
         STX: "blockstack",
@@ -2271,14 +2269,12 @@
         const hasClassic = sources.includes("classic");
         const hasHodlmm = sources.includes("hodlmm");
         const note =
-          hasClassic && hasHodlmm && liveHodlmmFallbackActive
-            ? "Dashboard coverage spans classic pools from tickerTest plus HODLMM / DLMM pools from the legacy fallback because the combined feed has no HODLMM rows right now."
-            : hasClassic && hasHodlmm
-            ? "Dashboard coverage spans classic pools and HODLMM / DLMM pools from the combined Bitflow ticker feed."
+          hasClassic && hasHodlmm
+            ? "Dashboard coverage spans classic pools and HODLMM / DLMM pools from the Bitflow ticker feed."
             : hasHodlmm
-            ? "Dashboard coverage currently shows HODLMM / DLMM pools from the combined Bitflow ticker feed."
+            ? "Dashboard coverage currently shows HODLMM / DLMM pools from the Bitflow ticker feed."
             : hasClassic
-            ? "Dashboard coverage currently shows classic pools only; the combined Bitflow ticker feed has no HODLMM / DLMM rows from the expected deployer."
+            ? "Dashboard coverage currently shows classic pools only; the Bitflow ticker feed has no HODLMM / DLMM rows from the expected deployer."
             : "Dashboard coverage reflects the current Bitflow ticker feed.";
         return {
           label: familyLabel,
@@ -2762,44 +2758,20 @@
         return rawTickers.map((raw) => normalizeTicker(raw));
       }
 
-      function mergeLiveTickers(tickersByPool, tickers, source) {
-        let added = 0;
+      function mergeLiveTickers(tickersByPool, tickers) {
         for (const ticker of tickers) {
-          if (!ticker.pool_id || (source && ticker.source !== source)) continue;
-          if (!tickersByPool.has(ticker.pool_id)) added += 1;
+          if (!ticker.pool_id) continue;
           tickersByPool.set(ticker.pool_id, ticker);
         }
-        return added;
       }
 
       async function fetchLiveSnapshotAndReport() {
-        liveHodlmmFallbackActive = false;
         const [liveTickers, externalPrices] = await Promise.all([
           fetchLiveTickerRows(LIVE_TICKER_URL),
           fetchLiveExternalPrices(),
         ]);
         const tickersByPool = new Map();
         mergeLiveTickers(tickersByPool, liveTickers);
-        const hasHodlmm = Array.from(tickersByPool.values()).some(
-          (ticker) => ticker.source === "hodlmm"
-        );
-        if (!hasHodlmm) {
-          try {
-            const added = mergeLiveTickers(
-              tickersByPool,
-              await fetchLiveTickerRows(LIVE_HODLMM_FALLBACK_URL),
-              "hodlmm"
-            );
-            if (added > 0) {
-              liveHodlmmFallbackActive = true;
-              console.warn(
-                `tickerTest returned no HODLMM rows; added ${added} rows from the legacy HODLMM fallback.`
-              );
-            }
-          } catch (err) {
-            console.warn("HODLMM fallback unavailable:", err);
-          }
-        }
         const timestamp = new Date().toISOString();
         const tickers = Array.from(tickersByPool.values());
         const pricing = {
