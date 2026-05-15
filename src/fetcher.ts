@@ -35,9 +35,10 @@ function normalizeCurrency(currency: unknown): string {
 
 function normalizeTickerId(rawTickerId: unknown, baseCurrency: string, targetCurrency: string): string {
   const value = rawTickerId == null ? "" : String(rawTickerId);
-  const idx = value.indexOf("_");
+  const pairValue = value.replace(/_hodlmm_dlmm_\d+$/, "");
+  const idx = pairValue.indexOf("_");
   if (idx < 0) return `${baseCurrency}_${targetCurrency}`;
-  return `${normalizeCurrency(value.slice(0, idx))}_${normalizeCurrency(value.slice(idx + 1))}`;
+  return `${normalizeCurrency(pairValue.slice(0, idx))}_${normalizeCurrency(pairValue.slice(idx + 1))}`;
 }
 
 function normalizePriceField(
