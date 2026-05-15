@@ -1726,6 +1726,14 @@
       };
       const TRACKED_SYMBOLS = ["STX", "sBTC", "aeUSDC", "USDCx", "USDh"];
       const STABLE_SYMBOLS = ["aeUSDC", "USDCx", "USDh"];
+      const LIVE_TICKER_URL = "https://api.bitflowapis.finance/tickerTest";
+      const LIVE_COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
+      const LIVE_COINGECKO_IDS = {
+        STX: "blockstack",
+        sBTC: "bitcoin",
+      };
+      const LOCAL_DATA_STALE_MS = 2 * 60 * 1000;
+      const LIVE_HISTORY_LIMIT = 240;
       const SOURCE_FILTER_LABELS = {
         all: "All pools",
         hodlmm: "HODLMM only",
@@ -1769,6 +1777,69 @@
           (price * Math.pow(10, decimalsX - decimalsY)) /
           DEFAULT_POOL_PRICE_SCALE_BPS
         );
+      }
+
+      function unscaleBinPrice(actualPrice, baseCurrency, targetCurrency) {
+        const decimalsX = getDecimals(baseCurrency);
+        const decimalsY = getDecimals(targetCurrency);
+        return (
+          (actualPrice * DEFAULT_POOL_PRICE_SCALE_BPS) /
+          Math.pow(10, decimalsX - decimalsY)
+        );
+      }
+
+      function priceEncodingForPool(poolId) {
+        return String(poolId ?? "").startsWith("dlmm_") ? "scaled" : "actual";
+      }
+
+      function normalizeCurrency(currency) {
+        if (currency == null) return "";
+        const value = String(currency);
+        return value === "Stacks" ? "STX" : value;
+      }
+
+      function normalizeTickerId(rawTickerId, baseCurrency, targetCurrency) {
+        const value = rawTickerId == null ? "" : String(rawTickerId);
+        const idx = value.indexOf("_");
+        if (idx < 0) return `${baseCurrency}_${targetCurrency}`;
+        return `${normalizeCurrency(value.slice(0, idx))}_${normalizeCurrency(
+          value.slice(idx + 1)
+        )}`;
+      }
+
+      function normalizePriceField(value, baseCurrency, targetCurrency, encoding) {
+        const numeric = Number(value ?? 0);
+        if (!Number.isFinite(numeric)) return "0";
+        if (encoding === "scaled") return String(numeric);
+        return String(unscaleBinPrice(numeric, baseCurrency, targetCurrency));
+      }
+
+      function normalizeTicker(raw) {
+        const baseCurrency = normalizeCurrency(raw.base_currency);
+        const targetCurrency = normalizeCurrency(raw.target_currency);
+        const poolId = String(raw.pool_id ?? "");
+        const encoding = priceEncodingForPool(poolId);
+
+        return {
+          ticker_id: normalizeTickerId(raw.ticker_id, baseCurrency, targetCurrency),
+          base_currency: baseCurrency,
+          target_currency: targetCurrency,
+          last_price: normalizePriceField(
+            raw.last_price,
+            baseCurrency,
+            targetCurrency,
+            encoding
+          ),
+          base_volume: String(raw.base_volume ?? 0),
+          target_volume: String(raw.target_volume ?? 0),
+          pool_id: poolId,
+          liquidity_in_usd: String(raw.liquidity_in_usd ?? 0),
+          bid: normalizePriceField(raw.bid, baseCurrency, targetCurrency, encoding),
+          ask: normalizePriceField(raw.ask, baseCurrency, targetCurrency, encoding),
+          high: normalizePriceField(raw.high, baseCurrency, targetCurrency, encoding),
+          low: normalizePriceField(raw.low, baseCurrency, targetCurrency, encoding),
+          source: poolId.startsWith("dlmm_") ? "hodlmm" : "classic",
+        };
       }
 
       function tokenName(contractId) {
@@ -2617,13 +2688,123 @@
         return data;
       }
 
-      async function fetchData() {
-        const [snap, rep] = await Promise.all([
-          fetchJsonArray("data/snapshots.json"),
-          fetchJsonArray("data/reports.json"),
+      function latestTimestampFromData(snapshotRows, reportRows) {
+        const latestSnapshot = snapshotRows[snapshotRows.length - 1]?.timestamp ?? null;
+        const latestReportRun = reportRows[reportRows.length - 1]?.run_at ?? null;
+        if (!latestSnapshot) return latestReportRun;
+        if (!latestReportRun) return latestSnapshot;
+        return latestSnapshot > latestReportRun ? latestSnapshot : latestReportRun;
+      }
+
+      function hasFreshLocalData(snapshotRows, reportRows) {
+        const latestTs = latestTimestampFromData(snapshotRows, reportRows);
+        if (!latestTs) return false;
+        const latestMs = new Date(latestTs).getTime();
+        return Number.isFinite(latestMs) && Date.now() - latestMs <= LOCAL_DATA_STALE_MS;
+      }
+
+      function appendUniqueByTimestamp(rows, row, timestampKey, limit) {
+        const next = rows.filter((existing) => existing?.[timestampKey] !== row[timestampKey]);
+        next.push(row);
+        next.sort((a, b) => String(a?.[timestampKey] ?? "").localeCompare(String(b?.[timestampKey] ?? "")));
+        return next.slice(Math.max(0, next.length - limit));
+      }
+
+      async function fetchLiveExternalPrices() {
+        const ids = Array.from(new Set(Object.values(LIVE_COINGECKO_IDS))).join(",");
+        const url = `${LIVE_COINGECKO_URL}?ids=${encodeURIComponent(
+          ids
+        )}&vs_currencies=usd`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) {
+          throw new Error(`Failed to load CoinGecko prices: ${res.status} ${res.statusText}`);
+        }
+        const raw = await res.json();
+        const prices = {};
+        for (const [symbol, geckoId] of Object.entries(LIVE_COINGECKO_IDS)) {
+          const price = raw?.[geckoId]?.usd;
+          if (price != null && Number.isFinite(Number(price))) {
+            prices[symbol] = Number(price);
+          }
+        }
+        return prices;
+      }
+
+      async function fetchLiveSnapshotAndReport() {
+        const [tickerRes, externalPrices] = await Promise.all([
+          fetch(LIVE_TICKER_URL, { headers: { Accept: "application/json" } }),
+          fetchLiveExternalPrices(),
         ]);
-        snapshots = snap;
-        reports = rep;
+        if (!tickerRes.ok) {
+          throw new Error(`Failed to load live ticker feed: ${tickerRes.status} ${tickerRes.statusText}`);
+        }
+        const rawTickers = await tickerRes.json();
+        if (!Array.isArray(rawTickers)) {
+          throw new Error("Unexpected live ticker response shape");
+        }
+        const tickersByPool = new Map();
+        for (const raw of rawTickers) {
+          const ticker = normalizeTicker(raw);
+          if (ticker.pool_id) tickersByPool.set(ticker.pool_id, ticker);
+        }
+        const timestamp = new Date().toISOString();
+        const tickers = Array.from(tickersByPool.values());
+        const pricing = {
+          timestamp,
+          ...computePricingForView(tickers, externalPrices),
+        };
+        return {
+          snapshot: {
+            timestamp,
+            tickers,
+          },
+          report: {
+            run_at: timestamp,
+            interval: "current",
+            snapshot_age_minutes: 0,
+            snapshot_timestamp: timestamp,
+            pools: [],
+            pricing,
+          },
+        };
+      }
+
+      async function fetchData() {
+        let snap = [];
+        let rep = [];
+        let localLoadError = null;
+        try {
+          [snap, rep] = await Promise.all([
+            fetchJsonArray("data/snapshots.json"),
+            fetchJsonArray("data/reports.json"),
+          ]);
+        } catch (err) {
+          localLoadError = err;
+          console.warn("Local data unavailable; falling back to live feed:", err);
+        }
+
+        if (hasFreshLocalData(snap, rep)) {
+          snapshots = snap;
+          reports = rep;
+        } else {
+          const live = await fetchLiveSnapshotAndReport();
+          snapshots = appendUniqueByTimestamp(
+            Array.isArray(snap) ? snap : [],
+            live.snapshot,
+            "timestamp",
+            LIVE_HISTORY_LIMIT
+          );
+          reports = appendUniqueByTimestamp(
+            Array.isArray(rep) ? rep : [],
+            live.report,
+            "run_at",
+            LIVE_HISTORY_LIMIT
+          );
+          if (localLoadError) {
+            console.warn("Using live feed because local dashboard data could not be loaded.");
+          }
+        }
+
         processData();
         renderHeaderStatus();
       }
@@ -2966,8 +3147,8 @@
           });
         }
 
-        latestAggregated
-          .filter((agg) => agg.is_divergent)
+        const activeAlerts = latestAggregated.filter((agg) => agg.is_divergent);
+        activeAlerts
           .sort((a, b) => {
             const aStable = isTrackedStable(a.symbol) ? 0 : 1;
             const bStable = isTrackedStable(b.symbol) ? 0 : 1;
@@ -2990,11 +3171,16 @@
             });
           });
 
-        if (items.length === 1) {
+        if (!activeAlerts.length) {
+          const currentState = latestAggregated.length
+            ? latestAggregated
+                .map((agg) => `${agg.symbol} ${formatDivergence(agg)}`)
+                .join(" · ")
+            : "Waiting for pricing data.";
           items.push({
             type: "note",
             title: "No active token alerts",
-            body: "All tracked assets are currently within their configured tolerance bands.",
+            body: `All tracked assets are currently within their configured tolerance bands. ${currentState}`,
           });
         }
 

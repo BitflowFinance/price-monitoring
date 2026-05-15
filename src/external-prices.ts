@@ -1,35 +1,34 @@
 import { COINGECKO_IDS } from "./tokens.js";
 
-const COINGECKO_URL = "https://pro-api.coingecko.com/api/v3/simple/price";
+const COINGECKO_PRO_URL = "https://pro-api.coingecko.com/api/v3/simple/price";
+const COINGECKO_PUBLIC_URL = "https://api.coingecko.com/api/v3/simple/price";
 const FETCH_TIMEOUT_MS = 15_000;
 
 // Returns a map of symbol → USD price (e.g. { STX: 0.26, sBTC: 95000, aeUSDC: 1.00 })
 // On partial failure, logs a warning and returns whatever was fetched.
 export async function fetchExternalPrices(): Promise<Record<string, number>> {
   const apiKey = process.env.COINGECKO_API_KEY;
-  if (!apiKey) {
-    console.warn("[external-prices] COINGECKO_API_KEY not set — skipping external price fetch");
-    return {};
-  }
 
   // Build the unique set of CoinGecko IDs we need
   const idSet = new Set(Object.values(COINGECKO_IDS));
   const ids = Array.from(idSet).join(",");
 
-  const url = `${COINGECKO_URL}?ids=${ids}&vs_currencies=usd`;
+  const baseUrl = apiKey ? COINGECKO_PRO_URL : COINGECKO_PUBLIC_URL;
+  const url = `${baseUrl}?ids=${ids}&vs_currencies=usd`;
 
   let raw: Record<string, { usd: number }>;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch(url, {
-      headers: { "x-cg-pro-api-key": apiKey },
+      headers: apiKey ? { "x-cg-pro-api-key": apiKey } : undefined,
       signal: controller.signal,
     });
     clearTimeout(timer);
 
     if (!res.ok) {
-      console.warn(`[external-prices] CoinGecko responded ${res.status} ${res.statusText}`);
+      const tier = apiKey ? "Pro" : "public";
+      console.warn(`[external-prices] CoinGecko ${tier} API responded ${res.status} ${res.statusText}`);
       return {};
     }
     raw = await res.json();

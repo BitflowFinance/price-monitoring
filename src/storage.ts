@@ -5,7 +5,20 @@ import { Snapshot, Ticker, IntervalReport, SavedReport } from "./types.js";
 const DATA_DIR = path.join(process.cwd(), "data");
 const SNAPSHOTS_FILE = path.join(DATA_DIR, "snapshots.json");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
+const DEFAULT_MAX_SNAPSHOTS = 1_440; // 24 hours at one snapshot per minute
+const DEFAULT_MAX_REPORTS = 720; // enough for latest interval outputs without bloating dashboard fetches
 
+function positiveIntFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function keepNewest<T>(items: T[], maxItems: number): T[] {
+  if (items.length <= maxItems) return items;
+  return items.slice(items.length - maxItems);
+}
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
@@ -34,6 +47,7 @@ export function loadSnapshots(): Snapshot[] {
 
 export function saveSnapshot(tickers: Ticker[]): Snapshot {
   const snapshots = loadSnapshots();
+  const maxSnapshots = positiveIntFromEnv("PRICE_MONITORING_MAX_SNAPSHOTS", DEFAULT_MAX_SNAPSHOTS);
   const now = new Date();
 
   const newSnapshot: Snapshot = {
@@ -42,10 +56,11 @@ export function saveSnapshot(tickers: Ticker[]): Snapshot {
   };
 
   snapshots.push(newSnapshot);
+  const retainedSnapshots = keepNewest(snapshots, maxSnapshots);
 
-  fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(snapshots, null, 2), "utf-8");
+  fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(retainedSnapshots, null, 2), "utf-8");
   console.log(
-    `[storage] Saved snapshot at ${newSnapshot.timestamp}. Total kept: ${snapshots.length}`
+    `[storage] Saved snapshot at ${newSnapshot.timestamp}. Total kept: ${retainedSnapshots.length}`
   );
 
   return newSnapshot;
@@ -80,6 +95,7 @@ export function findClosestSnapshot(
 
 export function saveReport(report: IntervalReport, runAt: string): void {
   ensureDataDir();
+  const maxReports = positiveIntFromEnv("PRICE_MONITORING_MAX_REPORTS", DEFAULT_MAX_REPORTS);
 
   let reports: SavedReport[] = [];
   if (fs.existsSync(REPORTS_FILE)) {
@@ -91,6 +107,7 @@ export function saveReport(report: IntervalReport, runAt: string): void {
   }
 
   reports.push({ ...report, run_at: runAt });
+  const retainedReports = keepNewest(reports, maxReports);
 
-  fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports, null, 2), "utf-8");
+  fs.writeFileSync(REPORTS_FILE, JSON.stringify(retainedReports, null, 2), "utf-8");
 }

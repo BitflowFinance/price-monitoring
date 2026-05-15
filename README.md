@@ -57,7 +57,7 @@ The primary purpose of the pricing engine is to detect when any token's on-chain
 
 1. Computes a **Bitflow-estimated USD price** for every tracked token from Bitflow pool data using a VWAP-style aggregation.
 2. Uses a **fixed `$1.00` benchmark** for tracked stablecoins (`aeUSDC`, `USDCx`, `USDh`).
-3. Fetches **CoinGecko reference prices** for non-pegged assets like `STX` and `sBTC` when `COINGECKO_API_KEY` is available.
+3. Fetches **CoinGecko reference prices** for non-pegged assets like `STX` and `sBTC`, using a Pro key when configured and the public API otherwise.
 4. Computes **divergence %** between internal and reference prices.
 5. Flags tokens that exceed their **tolerance threshold**.
 
@@ -204,7 +204,7 @@ reports.json
 └─────────────────────────────────────────────────────────┘
 ```
 
-> There is currently no built-in retention policy. Long-running deployments should add an external cleanup step or implement pruning in `src/storage.ts`.
+> The collector prunes local JSON files after each write so the dashboard keeps a bounded, browser-friendly history window. Defaults retain about 24 hours and can be changed with `PRICE_MONITORING_MAX_SNAPSHOTS` and `PRICE_MONITORING_MAX_REPORTS`.
 
 ### Snapshot lookup
 
@@ -352,7 +352,7 @@ src/
 ├── storage.ts          Load / save / prune snapshots and reports, findClosestSnapshot()
 ├── analyzer.ts         computeVariance(), printReport(), printPricingSummary()
 ├── pricing.ts          computePricing() — VWAP engine, cross-pair resolution, divergence
-├── external-prices.ts  CoinGecko Pro API fetcher (COINGECKO_API_KEY env var)
+├── external-prices.ts  CoinGecko price fetcher (Pro key optional)
 ├── tokens.ts           Token metadata, stablecoin classification, tolerance thresholds
 ├── utils.ts            scaleBinPrice(), getDecimalsForCurrency()
 └── types.ts            All TypeScript interfaces
@@ -364,7 +364,9 @@ src/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `COINGECKO_API_KEY` | No | CoinGecko Pro API key. If unset, stablecoin peg checks still work, but CoinGecko-backed references for tokens like `STX` and `sBTC` will not be computed. |
+| `COINGECKO_API_KEY` | No | CoinGecko Pro API key. If unset, the collector falls back to CoinGecko's public API for `STX` and `sBTC` benchmark prices. |
+| `PRICE_MONITORING_MAX_SNAPSHOTS` | No | Maximum snapshots retained in `data/snapshots.json`. Defaults to `1440` (about 24 hours at one run per minute). |
+| `PRICE_MONITORING_MAX_REPORTS` | No | Maximum report entries retained in `data/reports.json`. Defaults to `720`, keeping recent interval outputs while snapshots retain the longer 24-hour lookback window. |
 
 ---
 
@@ -410,7 +412,7 @@ src/
 nvm use
 npm install
 cp .env.example .env
-# set COINGECKO_API_KEY in .env (optional but recommended)
+# set COINGECKO_API_KEY in .env if you have a Pro key (optional)
 npm start
 ```
 
@@ -431,6 +433,7 @@ Notes:
 - Data is written to `data/snapshots.json` and `data/reports.json` (both created automatically).
 - `snapshots.json` stores raw ticker fetches over time.
 - `reports.json` stores pricing snapshots for every run plus interval comparison reports when lookback windows are available.
+- By default, snapshots keep about a 24-hour dashboard window while reports keep the latest 720 entries. Increase `PRICE_MONITORING_MAX_SNAPSHOTS` and `PRICE_MONITORING_MAX_REPORTS` for longer local history.
 
 ---
 
@@ -449,6 +452,22 @@ npm run dashboard
 The default dashboard port is `5051`. If `5051` is already in use, `serve` will print a different local port.
 
 All dashboard timestamps are displayed in UTC.
+
+### Public deployment
+
+The dashboard can also run as a static Vercel deployment. Local JSON files under
+`data/` are intentionally excluded from Vercel uploads; when those files are not
+present, the browser fetches the live Bitflow `/tickerTest` feed and CoinGecko
+reference prices directly, then computes the same token discrepancy alerts in
+the page.
+
+```bash
+vercel --prod
+```
+
+Vercel routes `/` and `/dashboard` to `dashboard.html` through `vercel.json`.
+The local collector (`npm start`) is still useful for long-running local
+history, interval comparisons, and pool movement history.
 
 ### Home view
 
