@@ -2616,6 +2616,7 @@
 
             if (
               pp.target_symbol === symbol &&
+              isTrackedStable(symbol) &&
               pp.scaled_price != null &&
               pp.scaled_price !== 0
             ) {
