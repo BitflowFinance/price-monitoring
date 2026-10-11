@@ -20,18 +20,29 @@ export async function fetchExternalPrices(): Promise<Record<string, number>> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const res = await fetch(url, {
-      headers: apiKey ? { "x-cg-pro-api-key": apiKey } : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
+    try {
+      const res = await fetch(url, {
+        headers: apiKey ? { "x-cg-pro-api-key": apiKey } : undefined,
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const tier = apiKey ? "Pro" : "public";
-      console.warn(`[external-prices] CoinGecko ${tier} API responded ${res.status} ${res.statusText}`);
-      return {};
+      if (!res.ok) {
+        const tier = apiKey ? "Pro" : "public";
+        console.warn(`[external-prices] CoinGecko ${tier} API responded ${res.status} ${res.statusText}`);
+        return {};
+      }
+
+      const body: unknown = await res.json();
+      // Defensive: a non-object payload (e.g. an array, string, or null from a
+      // misrouted proxy) would otherwise throw a TypeError on the lookup below.
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        console.warn("[external-prices] Unexpected CoinGecko response shape:", typeof body);
+        return {};
+      }
+      raw = body as Record<string, { usd: number }>;
+    } finally {
+      clearTimeout(timer);
     }
-    raw = await res.json();
   } catch (err) {
     console.warn("[external-prices] Failed to fetch external prices:", err);
     return {};
@@ -41,11 +52,14 @@ export async function fetchExternalPrices(): Promise<Record<string, number>> {
   // When multiple symbols share an ID (all stablecoins → usd-coin), each gets the same price
   const result: Record<string, number> = {};
   for (const [symbol, geckoId] of Object.entries(COINGECKO_IDS)) {
-    const price = raw[geckoId]?.usd;
-    if (price != null) {
+    const entry = raw[geckoId];
+    const price = entry && typeof entry === "object" && !Array.isArray(entry) ? entry.usd : undefined;
+    // Reject non-finite/non-positive prices so a 0 or NaN reference never
+    // zeroes out divergence math or hides as a valid external quote.
+    if (typeof price === "number" && Number.isFinite(price) && price > 0) {
       result[symbol] = price;
     } else {
-      console.warn(`[external-prices] No price returned for ${symbol} (id: ${geckoId})`);
+      console.warn(`[external-prices] No valid price returned for ${symbol} (id: ${geckoId})`);
     }
   }
 

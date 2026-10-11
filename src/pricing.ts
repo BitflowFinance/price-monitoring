@@ -13,7 +13,9 @@ import { scaleBinPrice, getDecimalsForCurrency } from "./utils.js";
 // ─────────────────────────────────────────────────────────
 
 function vwap(entries: { price: number; volumeUsd: number }[]): number | null {
-  const active = entries.filter(e => e.volumeUsd > 0);
+  // Reject non-finite and non-positive prices: a zero/NaN price with weight would
+  // drag the estimate toward 0 and silently disable divergence detection.
+  const active = entries.filter(e => e.volumeUsd > 0 && Number.isFinite(e.price) && e.price > 0);
   if (!active.length) return null;
   const sumPV = active.reduce((s, e) => s + e.price * e.volumeUsd, 0);
   const sumV  = active.reduce((s, e) => s + e.volumeUsd, 0);

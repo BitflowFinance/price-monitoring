@@ -32,17 +32,31 @@ function ensureDataDir(): void {
   }
 }
 
+// Write via a temp file + atomic rename so a crash mid-write can never leave a
+// truncated JSON array that trips Array.isArray guards on the next load.
+function writeJsonAtomic(file: string, value: unknown): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), "utf-8");
+  fs.renameSync(tmp, file);
+}
+
+// parseJsonArray tolerates a corrupt/non-array file instead of letting a
+// TypeError crash the collector permanently; [] is the safe "fresh start" shape.
+function parseJsonArray<T>(file: string, label: string): T[] {
+  try {
+    const raw = fs.readFileSync(file, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    console.error(`[storage] Failed to parse ${label} file, starting fresh.`);
+    return [];
+  }
+}
+
 export function loadSnapshots(): Snapshot[] {
   ensureDataDir();
   if (!fs.existsSync(SNAPSHOTS_FILE)) return [];
-
-  try {
-    const raw = fs.readFileSync(SNAPSHOTS_FILE, "utf-8");
-    return JSON.parse(raw) as Snapshot[];
-  } catch {
-    console.error("[storage] Failed to parse snapshots file, starting fresh.");
-    return [];
-  }
+  return parseJsonArray<Snapshot>(SNAPSHOTS_FILE, "snapshots");
 }
 
 export function saveSnapshot(tickers: Ticker[]): Snapshot {
@@ -58,7 +72,7 @@ export function saveSnapshot(tickers: Ticker[]): Snapshot {
   snapshots.push(newSnapshot);
   const retainedSnapshots = keepNewest(snapshots, maxSnapshots);
 
-  fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(retainedSnapshots, null, 2), "utf-8");
+  writeJsonAtomic(SNAPSHOTS_FILE, retainedSnapshots);
   console.log(
     `[storage] Saved snapshot at ${newSnapshot.timestamp}. Total kept: ${retainedSnapshots.length}`
   );
@@ -99,15 +113,11 @@ export function saveReport(report: IntervalReport, runAt: string): void {
 
   let reports: SavedReport[] = [];
   if (fs.existsSync(REPORTS_FILE)) {
-    try {
-      reports = JSON.parse(fs.readFileSync(REPORTS_FILE, "utf-8")) as SavedReport[];
-    } catch {
-      console.error("[storage] Failed to parse reports file, starting fresh.");
-    }
+    reports = parseJsonArray<SavedReport>(REPORTS_FILE, "reports");
   }
 
   reports.push({ ...report, run_at: runAt });
   const retainedReports = keepNewest(reports, maxReports);
 
-  fs.writeFileSync(REPORTS_FILE, JSON.stringify(retainedReports, null, 2), "utf-8");
+  writeJsonAtomic(REPORTS_FILE, retainedReports);
 }
