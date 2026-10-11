@@ -81,7 +81,9 @@ async function runJob(): Promise<void> {
 
 // Run immediately on startup, then every minute.
 console.log("[cron] Ticker analytics starting...");
-runJob();
+// The startup run shares the cron handler so an unhandled rejection can never
+// take the process down before the scheduler is installed.
+runJob().catch((err) => console.error("[cron] Unhandled error in startup job:", err));
 
 cron.schedule("* * * * *", () => {
   runJob().catch((err) => console.error("[cron] Unhandled error in job:", err));
